@@ -11,7 +11,7 @@
     "build:android:aab": "eas build --platform android --profile production",
     "build:android:local": "eas build --platform android --profile preview --local",
     "build:android:win": "powershell -ExecutionPolicy Bypass -File scripts/build-android.ps1",
-    "prebuild:android": "expo prebuild --platform android --clean",
+    "prebuild:android": "expo prebuild --platform android --clean --skip-dependency-update",
     "run:android": "expo run:android",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -73,9 +73,6 @@
     "expo-audio": "~1.1.1",
     "expo-document-picker": "~14.0.8",
     "expo-video": "~3.0.16",
-    "react-native-maps": "1.18.0",
-    "expo": "~54.0.35",
-    "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native-maps": "1.18.0"
   }
 }
