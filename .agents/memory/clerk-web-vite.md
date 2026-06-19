@@ -1,0 +1,9 @@
+---
+name: Clerk web (Vite) package + base-path gotchas
+description: Correct Clerk package for React+Vite web artifacts and base-path-safe asset URLs
+---
+- The Clerk package for React+Vite **web** artifacts is `@clerk/react` (Clerk Core v3), NOT `@clerk/clerk-react`. The canonical wiring imports `ClerkProvider` from `@clerk/react` and `publishableKeyFromHost` from `@clerk/react/internal`. Installing `@clerk/clerk-react` causes Vite "could not resolve @clerk/react" errors.
+  **Why:** the clerk-auth setup-and-customization reference uses `@clerk/react`; the mobile app uses a different package (`@clerk/expo`), so don't assume symmetry.
+- Web Clerk → API auth: attach a **fresh Bearer token** via `setAuthTokenGetter(() => getToken())` (Clerk `useAuth`), registered in an effect inside `ClerkProvider`. Do NOT rely on the `__session` cookie alone. **Why:** the cookie JWT is short-lived (~60s); page navigations refresh it via Clerk's handshake, but XHR/fetch calls cannot, so after the tab sits idle every `/api/*` call 401s and the AuthGate shows a connection error even though the user is signed in. The api-server `clerkMiddleware` accepts the Authorization header, so Bearer works same-origin and sidesteps cookie staleness (matches the mobile pattern).
+- Static `public/` assets MUST be referenced with the base path, not root-relative. An artifact served under `/admin/` breaks on `src="/logo.svg"`; use `` src={`${import.meta.env.BASE_URL}logo.svg`} `` (BASE_URL includes trailing slash). Clerk `appearance.logoImageUrl` similarly needs `${window.location.origin}${basePath}/logo.svg`.
+- Auth gate error classification: only treat a 404 from `/users/me` as "not provisioned / access denied". The API client throws `ApiError` with a numeric `.status`; network/5xx/unknown must show a retry state, never "admins only".

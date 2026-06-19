@@ -1,0 +1,2002 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: users
+    description: User account operations
+  - name: providers
+    description: Service provider operations
+  - name: requests
+    description: Service request operations
+  - name: offers
+    description: Provider offer operations
+  - name: reviews
+    description: Review operations
+  - name: notifications
+    description: Notification operations
+  - name: messages
+    description: Contact message operations
+  - name: skills
+    description: Skill and provider skill management
+  - name: Storage
+    description: Object storage upload and serving endpoints.
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /users/me:
+    get:
+      operationId: getCurrentUser
+      tags: [users]
+      summary: Get the authenticated user's profile
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not yet provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateCurrentUser
+      tags: [users]
+      summary: Update the authenticated user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /users:
+    post:
+      operationId: provisionUser
+      tags: [users]
+      summary: Provision the authenticated user's local account
+      description: Creates the local user record bound to the authenticated identity, with the chosen role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "200":
+          description: Provisioned user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Provider provisioning requires commission agreement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /providers:
+    get:
+      operationId: listProviders
+      tags: [providers]
+      summary: List service providers
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: serviceType
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Provider"
+    post:
+      operationId: createProvider
+      tags: [providers]
+      summary: Create or submit a provider profile for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderInput"
+      responses:
+        "201":
+          description: Created provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+  /providers/me:
+    get:
+      operationId: getMyProvider
+      tags: [providers]
+      summary: Get the authenticated user's provider profile
+      responses:
+        "200":
+          description: Provider profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "404":
+          description: No provider profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /providers/{id}:
+    get:
+      operationId: getProvider
+      tags: [providers]
+      summary: Get a provider by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateProvider
+      tags: [providers]
+      summary: Update a provider (availability by owner, status by admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderUpdate"
+      responses:
+        "200":
+          description: Updated provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+  /providers/{id}/request-info:
+    post:
+      operationId: requestProviderInfo
+      tags: [providers]
+      summary: Admin requests additional information from a provider applicant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestInfoInput"
+      responses:
+        "200":
+          description: Updated provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /providers/{id}/documents/{kind}:
+    get:
+      operationId: getProviderDocument
+      tags: [providers]
+      summary: Stream a provider verification document (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [osek_patur, osek_murshe, id]
+      responses:
+        "200":
+          description: Document content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /presence/ping:
+    post:
+      operationId: pingPresence
+      tags: [presence]
+      summary: Heartbeat to mark the authenticated user as recently active
+      responses:
+        "204":
+          description: Recorded
+  /admin/online-count:
+    get:
+      operationId: getOnlineCount
+      tags: [presence]
+      summary: Count of users active within the recent window (admin only)
+      responses:
+        "200":
+          description: Online count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineCount"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /requests:
+    get:
+      operationId: listRequests
+      tags: [requests]
+      summary: List service requests
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: mine
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: providerId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: lat
+          in: query
+          required: false
+          description: Latitude of the reference point for nearby filtering.
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: false
+          description: Longitude of the reference point for nearby filtering.
+          schema:
+            type: number
+        - name: radiusKm
+          in: query
+          required: false
+          description: Only return requests within this many kilometers of lat/lng.
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceRequest"
+    post:
+      operationId: createRequest
+      tags: [requests]
+      summary: Create a service request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestInput"
+      responses:
+        "201":
+          description: Created request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRequest"
+  /requests/{id}:
+    get:
+      operationId: getRequest
+      tags: [requests]
+      summary: Get a request by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRequest"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateRequest
+      tags: [requests]
+      summary: Update a request (status, assignment, schedule)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUpdate"
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRequest"
+  /requests/{id}/offers:
+    get:
+      operationId: listRequestOffers
+      tags: [offers]
+      summary: List offers for a request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Offer"
+  /requests/{id}/contact:
+    get:
+      operationId: getRequestContact
+      tags: [requests]
+      summary: Get the other party's contact details (revealed only after the request is accepted)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contact details of the counterparty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestContact"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Not available until the request is accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /offers:
+    get:
+      operationId: listOffers
+      tags: [offers]
+      summary: List offers
+      parameters:
+        - name: requestId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: mine
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Offer"
+    post:
+      operationId: createOffer
+      tags: [offers]
+      summary: Create an offer on a request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfferInput"
+      responses:
+        "201":
+          description: Created offer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Offer"
+  /offers/{id}:
+    patch:
+      operationId: updateOffer
+      tags: [offers]
+      summary: Update an offer (accept/reject)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfferUpdate"
+      responses:
+        "200":
+          description: Updated offer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Offer"
+
+  /reviews:
+    get:
+      operationId: listReviews
+      tags: [reviews]
+      summary: List reviews
+      parameters:
+        - name: providerId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Create a review for a completed request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewInput"
+      responses:
+        "201":
+          description: Created review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List the authenticated user's notifications
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+  /notifications/{id}:
+    patch:
+      operationId: updateNotification
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationUpdate"
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: List contact messages (admin)
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactMessage"
+    post:
+      operationId: createMessage
+      tags: [messages]
+      summary: Submit a contact message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactMessage"
+  /messages/{id}:
+    patch:
+      operationId: updateMessage
+      tags: [messages]
+      summary: Reply to or resolve a contact message (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageUpdate"
+      responses:
+        "200":
+          description: Updated message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactMessage"
+
+  /skills:
+    get:
+      operationId: listSkills
+      tags: [skills]
+      summary: List all skills
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [built_in, custom, all]
+          description: Filter by skill type
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected, all]
+          description: Filter by status (defaults to approved)
+      responses:
+        "200":
+          description: Skills list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Skill"
+    post:
+      operationId: createSkill
+      tags: [skills]
+      summary: Create a new skill (custom)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkillInput"
+      responses:
+        "201":
+          description: Created skill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Skill already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /skills/{id}:
+    get:
+      operationId: getSkill
+      tags: [skills]
+      summary: Get a skill by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Skill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateSkill
+      tags: [skills]
+      summary: Update a skill (admin — review/approve a proposed service)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSkillInput"
+      responses:
+        "200":
+          description: Updated skill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteSkill
+      tags: [skills]
+      summary: Delete a skill (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /provider-skills:
+    get:
+      operationId: listProviderSkills
+      tags: [skills]
+      summary: List skills for the current provider
+      responses:
+        "200":
+          description: Provider skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderSkill"
+        "404":
+          description: No provider profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: setProviderSkills
+      tags: [skills]
+      summary: Set skills for the current provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetProviderSkillsInput"
+      responses:
+        "200":
+          description: Updated skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderSkill"
+        "404":
+          description: No provider profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /chat/conversations:
+    get:
+      operationId: listChatConversations
+      tags: [chat]
+      summary: List the authenticated user's chat conversations
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatConversation"
+  /chat/messages:
+    get:
+      operationId: listChatMessages
+      tags: [chat]
+      summary: List messages in a conversation (request + provider)
+      parameters:
+        - name: requestId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: providerId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+    post:
+      operationId: sendChatMessage
+      tags: [chat]
+      summary: Send a chat message in a conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageInput"
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+  /chat/messages/read:
+    post:
+      operationId: markChatRead
+      tags: [chat]
+      summary: Mark incoming messages in a conversation as read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatReadInput"
+      responses:
+        "200":
+          description: Number of messages marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatReadResult"
+
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      description: |
+        Returns a presigned GCS URL for direct upload. The client sends JSON
+        metadata here, then uploads the file directly to the returned URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+      description: |
+        Unconditionally public — no authentication or ACL checks.
+        Searches PUBLIC_OBJECT_SEARCH_PATHS for the given file path.
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Relative file path within the public search paths.
+      responses:
+        "200":
+          description: Object content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to serve public object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity from PRIVATE_OBJECT_DIR
+      description: |
+        Serves object entities uploaded via presigned URLs. These can optionally
+        be protected with authentication or ACL checks based on the use case.
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Object path within the private object dir (e.g. `uploads/some-uuid`).
+      responses:
+        "200":
+          description: Object content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to serve object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /commission/me:
+    get:
+      operationId: getMyCommission
+      tags: [commission]
+      summary: Get the authenticated provider's commission balance summary
+      responses:
+        "200":
+          description: Commission summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommissionSummary"
+        "404":
+          description: No provider profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /commission/me/entries:
+    get:
+      operationId: listMyCommissionEntries
+      tags: [commission]
+      summary: List the authenticated provider's commission ledger entries
+      responses:
+        "200":
+          description: Commission ledger entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CommissionLedgerEntry"
+        "404":
+          description: No provider profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /commission/admin:
+    get:
+      operationId: getAdminCommissionOverview
+      tags: [commission]
+      summary: Platform commission overview with per-provider balances (admin)
+      responses:
+        "200":
+          description: Commission overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCommissionOverview"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /commission/admin/settlements:
+    post:
+      operationId: recordCommissionSettlement
+      tags: [commission]
+      summary: Record a provider commission settlement payment (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordSettlementInput"
+      responses:
+        "201":
+          description: Recorded settlement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommissionLedgerEntry"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    RequestContact:
+      type: object
+      required: [name, role]
+      properties:
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [customer, provider]
+          description: The role of the counterparty whose contact is returned.
+
+    User:
+      type: object
+      required: [id, clerkUserId, name, role, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        clerkUserId:
+          type: string
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [customer, provider, admin]
+        avatarUrl:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        lat:
+          type: ["number", "null"]
+        lng:
+          type: ["number", "null"]
+        commissionAgreedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UserInput:
+      type: object
+      required: [name, role]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          enum: [customer, provider]
+        email:
+          type: string
+        phone:
+          type: string
+        commissionAgreed:
+          type: boolean
+          description: Required true when role is "provider"; records consent to the platform commission.
+        language:
+          type: string
+          enum: [ar, en, he]
+          description: Preferred UI language; used to localize server-sent notifications.
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        phone:
+          type: string
+        avatarUrl:
+          type: string
+        address:
+          type: ["string", "null"]
+        lat:
+          type: ["number", "null"]
+        lng:
+          type: ["number", "null"]
+
+    Provider:
+      type: object
+      required:
+        [
+          id,
+          userId,
+          status,
+          rating,
+          ratingCount,
+          isAvailable,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        name:
+          type: ["string", "null"]
+        serviceType:
+          type: ["string", "null"]
+        bio:
+          type: ["string", "null"]
+        experienceYears:
+          type: ["integer", "null"]
+        phone:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        addressText:
+          type: ["string", "null"]
+        docOsekPaturPath:
+          type: ["string", "null"]
+        docOsekMurshePath:
+          type: ["string", "null"]
+        docIdPath:
+          type: ["string", "null"]
+        reviewNote:
+          type: ["string", "null"]
+        reviewRequestedAt:
+          type: ["string", "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [pending, under_review, needs_info, approved, rejected]
+        rating:
+          type: number
+        ratingCount:
+          type: integer
+        isAvailable:
+          type: boolean
+        availableFrom:
+          type: ["string", "null"]
+        availableTo:
+          type: ["string", "null"]
+        lat:
+          type: ["number", "null"]
+        lng:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProviderInput:
+      type: object
+      required: [phone, addressText, docOsekPaturPath, docIdPath]
+      properties:
+        serviceType:
+          type: string
+          minLength: 1
+        bio:
+          type: string
+        experienceYears:
+          type: integer
+          minimum: 0
+          maximum: 60
+        phone:
+          type: string
+          minLength: 1
+        city:
+          type: string
+        addressText:
+          type: string
+          minLength: 1
+        docOsekPaturPath:
+          type: string
+          minLength: 1
+        docOsekMurshePath:
+          type: string
+        docIdPath:
+          type: string
+          minLength: 1
+        lat:
+          type: number
+        lng:
+          type: number
+    ProviderUpdate:
+      type: object
+      properties:
+        serviceType:
+          type: ["string", "null"]
+        bio:
+          type: string
+        experienceYears:
+          type: integer
+          minimum: 0
+          maximum: 60
+        phone:
+          type: string
+        city:
+          type: string
+        addressText:
+          type: string
+        docOsekPaturPath:
+          type: string
+        docOsekMurshePath:
+          type: ["string", "null"]
+        docIdPath:
+          type: string
+        isAvailable:
+          type: boolean
+        availableFrom:
+          type: ["string", "null"]
+        availableTo:
+          type: ["string", "null"]
+        lat:
+          type: number
+        lng:
+          type: number
+        reviewNote:
+          type: ["string", "null"]
+          description: Optional admin-written reason; included in the rejection notification sent to the provider.
+        status:
+          type: string
+          enum: [pending, under_review, needs_info, approved, rejected]
+
+    RequestInfoInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+
+    OnlineCount:
+      type: object
+      required: [count, windowMinutes]
+      properties:
+        count:
+          type: integer
+        windowMinutes:
+          type: integer
+
+    ServiceRequest:
+      type: object
+      required:
+        [
+          id,
+          requestNumber,
+          userId,
+          skillId,
+          status,
+          includesSpareParts,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: integer
+        requestNumber:
+          type: string
+        userId:
+          type: integer
+        providerId:
+          type: ["integer", "null"]
+        skillId:
+          type: integer
+        description:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        videoUrl:
+          type: ["string", "null"]
+        includesSpareParts:
+          type: boolean
+        lat:
+          type: ["number", "null"]
+        lng:
+          type: ["number", "null"]
+        address:
+          type: ["string", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+          enum: [on_site, null]
+        status:
+          type: string
+          enum: [pending, active, in_progress, completed, cancelled]
+        priceMin:
+          type: ["integer", "null"]
+        priceMax:
+          type: ["integer", "null"]
+        preferredTime:
+          type: ["string", "null"]
+          format: date-time
+        scheduledTime:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    RequestInput:
+      type: object
+      required: [skillId]
+      properties:
+        skillId:
+          type: integer
+        description:
+          type: string
+        imageUrl:
+          type: string
+        videoUrl:
+          type: string
+        includesSpareParts:
+          type: boolean
+        lat:
+          type: number
+        lng:
+          type: number
+        address:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [on_site]
+        priceMin:
+          type: integer
+        priceMax:
+          type: integer
+        preferredTime:
+          type: string
+          format: date-time
+        scheduledTime:
+          type: string
+          format: date-time
+    RequestUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, active, in_progress, completed, cancelled]
+        providerId:
+          type: integer
+        scheduledTime:
+          type: string
+          format: date-time
+        priceMin:
+          type: integer
+        priceMax:
+          type: integer
+
+    Offer:
+      type: object
+      required: [id, requestId, providerId, price, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        requestId:
+          type: integer
+        providerId:
+          type: integer
+        price:
+          type: integer
+        message:
+          type: ["string", "null"]
+        availableTime:
+          type: ["string", "null"]
+          format: date-time
+        estimatedDuration:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OfferInput:
+      type: object
+      required: [requestId, price]
+      properties:
+        requestId:
+          type: integer
+        price:
+          type: integer
+          minimum: 0
+        message:
+          type: string
+        availableTime:
+          type: string
+          format: date-time
+        estimatedDuration:
+          type: string
+    OfferUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        price:
+          type: integer
+          minimum: 0
+        message:
+          type: string
+
+    Review:
+      type: object
+      required: [id, requestId, providerId, userId, rating, createdAt]
+      properties:
+        id:
+          type: integer
+        requestId:
+          type: integer
+        providerId:
+          type: integer
+        userId:
+          type: integer
+        rating:
+          type: integer
+        comment:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+    ReviewInput:
+      type: object
+      required: [requestId, providerId, rating]
+      properties:
+        requestId:
+          type: integer
+        providerId:
+          type: integer
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+
+    Notification:
+      type: object
+      required: [id, userId, title, isRead, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        title:
+          type: string
+        body:
+          type: ["string", "null"]
+        type:
+          type: ["string", "null"]
+        isRead:
+          type: boolean
+        data:
+          type: ["object", "null"]
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    NotificationUpdate:
+      type: object
+      properties:
+        isRead:
+          type: boolean
+
+    ContactMessage:
+      type: object
+      required: [id, name, message, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        subject:
+          type: ["string", "null"]
+        message:
+          type: string
+        status:
+          type: string
+          enum: [open, resolved]
+        reply:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    MessageInput:
+      type: object
+      required: [name, message]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+        subject:
+          type: string
+        message:
+          type: string
+          minLength: 1
+    MessageUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [open, resolved]
+        reply:
+          type: string
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Original file name.
+        size:
+          type: integer
+          minimum: 1
+          description: File size in bytes.
+        contentType:
+          type: string
+          minLength: 1
+          description: MIME type of the file (e.g. `image/jpeg`).
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+          description: Presigned GCS URL for PUT upload.
+        objectPath:
+          type: string
+          description: Normalized object path (e.g. `/objects/uploads/uuid`). Store this in your database.
+        metadata:
+          $ref: "#/components/schemas/UploadUrlRequest"
+
+    ChatMessage:
+      type: object
+      required: [id, requestId, providerId, senderId, body, isRead, createdAt]
+      properties:
+        id:
+          type: integer
+        requestId:
+          type: integer
+        providerId:
+          type: integer
+        senderId:
+          type: integer
+        body:
+          type: string
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    ChatMessageInput:
+      type: object
+      required: [requestId, providerId, body]
+      properties:
+        requestId:
+          type: integer
+        providerId:
+          type: integer
+        body:
+          type: string
+          minLength: 1
+    ChatReadInput:
+      type: object
+      required: [requestId, providerId]
+      properties:
+        requestId:
+          type: integer
+        providerId:
+          type: integer
+    ChatReadResult:
+      type: object
+      required: [updated]
+      properties:
+        updated:
+          type: integer
+    ChatConversation:
+      type: object
+      required:
+        [
+          requestId,
+          providerId,
+          requestNumber,
+          otherPartyName,
+          unreadCount,
+        ]
+      properties:
+        requestId:
+          type: integer
+        providerId:
+          type: integer
+        requestNumber:
+          type: string
+        skillName:
+          type: ["string", "null"]
+        otherPartyName:
+          type: string
+        lastMessage:
+          type: ["string", "null"]
+        lastMessageAt:
+          type: ["string", "null"]
+          format: date-time
+        unreadCount:
+          type: integer
+
+    CommissionLedgerEntry:
+      type: object
+      required: [id, providerId, type, amount, createdAt]
+      properties:
+        id:
+          type: integer
+        providerId:
+          type: integer
+        requestId:
+          type: ["integer", "null"]
+        type:
+          type: string
+          enum: [commission, settlement]
+        amount:
+          type: integer
+        note:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+    CommissionSummary:
+      type: object
+      required:
+        [owed, totalCommission, totalSettled, threshold, blocked, jobsCount]
+      properties:
+        owed:
+          type: integer
+        totalCommission:
+          type: integer
+        totalSettled:
+          type: integer
+        threshold:
+          type: integer
+        blocked:
+          type: boolean
+        jobsCount:
+          type: integer
+    AdminProviderCommission:
+      type: object
+      required:
+        [
+          providerId,
+          name,
+          status,
+          owed,
+          totalCommission,
+          totalSettled,
+          jobsCount,
+          blocked,
+        ]
+      properties:
+        providerId:
+          type: integer
+        name:
+          type: ["string", "null"]
+        serviceType:
+          type: ["string", "null"]
+        status:
+          type: string
+        owed:
+          type: integer
+        totalCommission:
+          type: integer
+        totalSettled:
+          type: integer
+        jobsCount:
+          type: integer
+        blocked:
+          type: boolean
+    AdminCommissionOverview:
+      type: object
+      required:
+        [
+          totalCommission,
+          totalSettled,
+          totalOutstanding,
+          threshold,
+          providers,
+        ]
+      properties:
+        totalCommission:
+          type: integer
+        totalSettled:
+          type: integer
+        totalOutstanding:
+          type: integer
+        threshold:
+          type: integer
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminProviderCommission"
+    RecordSettlementInput:
+      type: object
+      required: [providerId, amount]
+      properties:
+        providerId:
+          type: integer
+        amount:
+          type: integer
+          minimum: 1
+        note:
+          type: string
+
+    Skill:
+      type: object
+      required: [id, name, slug, type, status, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        nameEn:
+          type: ["string", "null"]
+        nameHe:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        descriptionEn:
+          type: ["string", "null"]
+        descriptionHe:
+          type: ["string", "null"]
+        slug:
+          type: string
+        category:
+          type: ["string", "null"]
+        icon:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        image:
+          type: ["string", "null"]
+        type:
+          type: string
+          enum: [built_in, custom]
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        createdByUserId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+    SkillInput:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+        category:
+          type: string
+        icon:
+          type: string
+        color:
+          type: string
+        type:
+          type: string
+          enum: [built_in, custom]
+          default: custom
+    UpdateSkillInput:
+      type: object
+      description: Admin edit of a skill (review/approve a proposed service).
+      properties:
+        name:
+          type: string
+          minLength: 1
+        nameEn:
+          type: string
+        nameHe:
+          type: string
+        description:
+          type: string
+        descriptionEn:
+          type: string
+        descriptionHe:
+          type: string
+        category:
+          type: string
+        icon:
+          type: string
+        color:
+          type: string
+        image:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+
+    ProviderSkill:
+      type: object
+      required: [id, providerId, skillId, createdAt]
+      properties:
+        id:
+          type: integer
+        providerId:
+          type: integer
+        skillId:
+          type: integer
+        experienceYears:
+          type: ["integer", "null"]
+        skill:
+          $ref: "#/components/schemas/Skill"
+        createdAt:
+          type: string
+          format: date-time
+    SetProviderSkillsInput:
+      type: object
+      required: [skillIds]
+      properties:
+        skillIds:
+          type: array
+          items:
+            type: integer
+          description: IDs of skills to assign to the provider

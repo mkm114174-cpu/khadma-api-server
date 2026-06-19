@@ -1,0 +1,199 @@
+uploads = []
+
+[[generated]]
+id = "b_1WqoZ_k9APzuDmTLtGV"
+uri = "file://artifacts/khadma/assets/images/icon.png"
+type = "image"
+title = "khadma golden icon"
+
+[[generated]]
+id = "x2_g-p5PFUVE-NXIuJKmd"
+uri = "file://artifacts/khadma/assets/images/logo.png"
+type = "image"
+title = "khadma-app-logo"
+
+[[generated]]
+id = "E81GYjmwr2rlbhSd0KhyJ"
+uri = "file://artifacts/khadma/assets/images/role_bg.png"
+type = "image"
+title = "Role screen background"
+
+[[generated]]
+id = "Ppvzjo39iClMGJc7yLufL"
+uri = "file://artifacts/khadma/assets/images/home_bg.png"
+type = "image"
+title = "Home screen background"
+
+[[generated]]
+id = "gDjwgGbGlgziP5PACq6PS"
+uri = "file://artifacts/khadma/assets/images/provider1.png"
+type = "image"
+title = "Provider photo 1"
+
+[[generated]]
+id = "s913ZGi450RTrUgpHNI_A"
+uri = "file://artifacts/khadma/assets/images/provider2.png"
+type = "image"
+title = "Provider photo 2"
+
+[[generated]]
+id = "OUZqcAEqU2ynR7oaTwUe4"
+uri = "file://artifacts/khadma/assets/images/provider3.png"
+type = "image"
+title = "Provider photo 3"
+
+[[generated]]
+id = "F0NEbr0iIemRbU7Wdankm"
+uri = "file://artifacts/khadma/assets/images/cat_painting.png"
+type = "image"
+title = "Painting category"
+
+[[generated]]
+id = "LJ5VmjWN_wqs2MC02lV75"
+uri = "file://artifacts/khadma/assets/images/cat_plumbing.png"
+type = "image"
+title = "Plumbing category"
+
+[[generated]]
+id = "GVf8jg2AWN1wu6IIEfNm6"
+uri = "file://artifacts/khadma/assets/images/cat_electrical.png"
+type = "image"
+title = "Electrical category"
+
+[[generated]]
+id = "KZFIT2np3Ghx8mXlwfaN4"
+uri = "file://artifacts/khadma/assets/images/cat_cleaning.png"
+type = "image"
+title = "Cleaning category"
+
+[[generated]]
+id = "L46ZtQe0N0201nVqG0HJv"
+uri = "file://artifacts/khadma/assets/images/cat_ac.png"
+type = "image"
+title = "AC category"
+
+[[generated]]
+id = "Tu-SsylEvwOI9ejmJPpCX"
+uri = "file://artifacts/khadma/assets/images/cat_furniture.png"
+type = "image"
+title = "cat furniture"
+
+[[generated]]
+id = "torRkwW_6VEpQzTT1Nikz"
+uri = "file://artifacts/khadma/assets/images/cat_cars.png"
+type = "image"
+title = "cat cars"
+
+[[generated]]
+id = "sHZFggVhyD8epXq4ce0h5"
+uri = "file://artifacts/khadma/assets/images/cat_carpentry.png"
+type = "image"
+title = "cat carpentry"
+
+[[generated]]
+id = "cVbHP7MgJGIYbiq7xNNfH"
+uri = "file://artifacts/khadma/assets/images/cat_appliances.png"
+type = "image"
+title = "cat appliances"
+
+[[generated]]
+id = "GPjsijbQkzwDF26DlJMfs"
+uri = "file://artifacts/khadma/assets/images/cat_security.png"
+type = "image"
+title = "security service"
+
+[[generated]]
+id = "j1d7N7v2uQAt35ekM2ac1"
+uri = "file://artifacts/khadma/assets/images/cat_landscaping.png"
+type = "image"
+title = "cat landscaping"
+
+[[generated]]
+id = "vuKyjlcbDvRsw4bUEvuxA"
+uri = "file://artifacts/khadma/assets/images/cat_moving.png"
+type = "image"
+title = "cat moving"
+
+[[generated]]
+id = "Ky-ILGHNtcWrz5AlmVbTZ"
+uri = "file://artifacts/khadma/assets/images/cat_other.png"
+type = "image"
+title = "cat other"
+
+[[generated]]
+id = "ffdn6i4NcCVXmFtSbrG44"
+uri = "file://artifacts/khadma/assets/images/cat_pest_control.png"
+type = "image"
+title = "cat pest_control"
+
+[[generated]]
+id = "eiG5NrcDKpXIipqqXwcGa"
+uri = "file://artifacts/khadma/assets/images/cat_maintenance.png"
+type = "image"
+title = "generated_image"
+
+[[outputs]]
+id = "mru0MaHRY_hH9SSfTVD6U"
+uri = "file://exports/Khadma_review.pdf"
+type = "pdf"
+title = "تقييم ومراجعة نظام خدمة (Khadma)"
+
+[[outputs]]
+id = "yGIARgW1Z4v9RWZBkn8_G"
+uri = "file://exports/Khadma_source.tar.gz"
+type = "unspecified"
+title = "كود مشروع خدمة (نسخة كاملة)"
+
+[[outputs]]
+id = "6-_vmEhsjqBgOiVojZExb"
+uri = "file://exports/Khadma_Ownership.pdf"
+type = "pdf"
+title = "دليل ملكية ونقل مشروع خدمة (للطباعة)"
+
+[[outputs]]
+id = "LCdkLgaWcy-VQusJKsH95"
+uri = "file://exports/Khadma_Marketplace_Model.pdf"
+type = "pdf"
+title = "نموذج عمل الطلبات في تطبيق خدمة (للطباعة)"
+
+[[outputs]]
+id = "llyf0mpl8njYfoy9n93Ht"
+uri = "file://exports/Khadma_Ready_Status.pdf"
+type = "pdf"
+title = "التطبيق جاهز للعمل الفعلي — للطباعة"
+
+[[outputs]]
+id = "tKDxGnPTAci2kC6HB9_zv"
+uri = "file://exports/Khadma_Quality_Assessment.pdf"
+type = "pdf"
+title = "تقييم جودة تطبيق خدمة — 10 أسئلة (للطباعة)"
+
+[[outputs]]
+id = "hcAxAZ_R0sPcMruzjMYu8"
+uri = "file://exports/Khadma_Readiness_Risks.pdf"
+type = "pdf"
+title = "تقييم جاهزية، القوة، والمخاطر — 15 سؤال (للطباعة)"
+
+[[outputs]]
+id = "YJ_FeCYwOsupxz6v3tqKd"
+uri = "file://exports/Khadma_Readiness_Risks_Clean.pdf"
+type = "pdf"
+title = "تقييم جاهزية، القوة، والمخاطر — إصدار نهائي (للطباعة)"
+
+[[outputs]]
+id = "KK1GgvXNJMU_WMOhkxqXq"
+uri = "file://exports/khadma-full-app.zip"
+type = "unspecified"
+title = "خدمة (Khadma) — المشروع الكامل"
+
+[[outputs]]
+id = "bHCVlSxz4tjE5bAHdnxT9"
+uri = "file://exports/Khadma_Taqyeem.pdf"
+type = "pdf"
+title = "خدمة (Khadma) — تقرير تقييم التطبيق"
+
+[[outputs]]
+id = "9mpeFlnezz-79nNbhNwFq"
+uri = "file://exports/Khadma_Tarfee3_Altaqyeem.pdf"
+type = "pdf"
+title = "خدمة (Khadma) — كيف نرفع التقييم؟ وهل هو إنجاز كبير؟"

@@ -1,0 +1,104 @@
+import { useAuth, useClerk, RedirectToSignIn } from "@clerk/react";
+import { useGetCurrentUser } from "@workspace/api-client-react";
+import { Loader2, ShieldAlert, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number") return status;
+  }
+  return undefined;
+}
+
+function FullScreenLoader() {
+  return (
+    <div className="flex h-screen w-full items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-muted-foreground animate-pulse font-medium">جاري التحميل...</p>
+      </div>
+    </div>
+  );
+}
+
+export function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
+  const { data: user, isLoading, error, refetch, isFetching } = useGetCurrentUser();
+  const { signOut } = useClerk();
+
+  // Wait for Clerk to determine auth state before deciding anything.
+  if (!isLoaded) {
+    return <FullScreenLoader />;
+  }
+
+  // Signed-out users hitting a protected route → send them to sign-in.
+  if (!isSignedIn) {
+    return <RedirectToSignIn />;
+  }
+
+  if (isLoading) {
+    return <FullScreenLoader />;
+  }
+
+  const status = getErrorStatus(error);
+
+  // Session lost / token rejected → treat as signed-out, redirect to sign-in.
+  if (status === 401) {
+    return <RedirectToSignIn />;
+  }
+
+  // Network / 5xx / unknown error → retryable error state (NOT access denied)
+  if (error && status !== 404) {
+    return (
+      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-background p-4 text-center">
+        <div className="flex flex-col items-center gap-6 rounded-2xl border border-border bg-card p-10 shadow-2xl max-w-md w-full">
+          <div className="rounded-full bg-amber-500/10 p-4">
+            <AlertTriangle className="h-12 w-12 text-amber-500" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">تعذّر الاتصال</h1>
+            <p className="text-muted-foreground">حدث خطأ أثناء تحميل بياناتك. تحقّق من اتصالك ثم حاول مرة أخرى.</p>
+          </div>
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full font-bold"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            data-testid="button-retry-auth"
+          >
+            {isFetching ? <Loader2 className="h-5 w-5 animate-spin" /> : "إعادة المحاولة"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // user not provisioned (404) or not an admin → access denied
+  if (!user || user.role !== "admin") {
+    return (
+      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-background p-4 text-center">
+        <div className="flex flex-col items-center gap-6 rounded-2xl border border-border bg-card p-10 shadow-2xl max-w-md w-full">
+          <div className="rounded-full bg-destructive/10 p-4">
+            <ShieldAlert className="h-12 w-12 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">غير مصرح لك</h1>
+            <p className="text-muted-foreground">هذه اللوحة مخصّصة للمسؤولين فقط. حسابك الحالي لا يملك الصلاحيات الكافية للوصول.</p>
+          </div>
+          <Button 
+            variant="default" 
+            size="lg" 
+            className="w-full font-bold" 
+            onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL.replace(/\/$/, "") || "/" })}
+          >
+            تسجيل الخروج
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}

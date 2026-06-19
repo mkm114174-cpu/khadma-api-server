@@ -1,0 +1,18 @@
+- [Expo web asset URIs](expo-web-asset-uris.md) — react-native-web has no Image.resolveAssetSource; require() an asset to get its URL, and absolutize for srcDoc iframes.
+- [Expo Go push limitation](push-notifications-expo-go.md) — remote/background push can't work in Expo Go (SDK 53+); needs a dev/standalone build + token + server sender.
+- [Khadma dispatch model](marketplace-dispatch-model.md) — requests use broadcast+offers, not direct-assign; auto-reassign = periodic re-broadcast sweep for stale pending requests.
+- [Commission ledger idempotency](commission-ledger.md) — 10% debt per completed job; DB partial unique index + onConflictDoNothing keeps recording double-charge-safe; owed>500 blocks offers.
+- [Marketplace read authz](marketplace-read-authz.md) — GET /requests, /offers, /requests/:id/offers scope non-admins server-side; never trust query params for authz; pending pool is provider-only discovery.
+- [Khadma map framing](khadma-map-framing.md) — web Leaflet map must fitBounds from region deltas (not fixed setView zoom) to match native MapView; DEFAULT_REGION = north Israel.
+- [Khadma town grouping](khadma-town-grouping.md) — home map groups providers by town (providers.city ?? nearestCity); town-sheet sync by id-set not length; escape city names in web srcDoc.
+- [Khadma category→skill mapping](khadma-category-skill-mapping.md) — never hardcode skill IDs for POST /requests (FK); resolve real id from live catalog by slug/section. MCI icons don't render on Expo web — use Feather/FontAwesome.
+- [Admin protected media](admin-protected-media.md) — admin web is bearer-authed: load private media (KYC docs) via client Blob+objectURL, not raw <img>; final decision deletes docs so gate Approve/Reject behind the review dialog.
+- [Clerk Expo session activation](clerk-expo-session-activation.md) — sign-in/up must setActive (or finalize) the created session or isSignedIn stays false and the app loops back to login.
+- [Skills catalog authz](skills-catalog-authz.md) — propose gated by ROLE provider (not profile row, onboarding precedes it); pending/all lists admin-only; section ids whitelisted server-side.
+- [Khadma requests DB drift](khadma-db-drift.md) — live `requests` table has legacy NOT NULL `service_type` not in Drizzle schema; caused insert 500s; check information_schema, not just code.
+- [Request contact phone](khadma-request-contact-phone.md) — RequestInput has no phone field; mandatory-phone request flows must persist to user profile (updateCurrentUser) as a hard prerequisite.
+- [Khadma brand logo](khadma-brand-logo.md) — real logo is the golden LogoIcon component (#C8A574 rings+house); the yellow logo*.png assets are NOT the brand mark — user rejected them.
+- [Khadma auth status resolved](khadma-auth-status-resolved.md) — never emit needsProvision before /users/me fetch resolves, else signed-in users flash the registration screen & first login looks failed; guard Clerk verify/finalize in try/catch.
+- [Drizzle push data-loss drift](drizzle-push-dataloss-drift.md) — `db push` aborts non-interactively on unrelated data-loss drift; never push-force; land additive nullable columns via direct ALTER TABLE.
+- [Khadma contact reveal](khadma-contact-reveal.md) — phone/chat gated to post-acceptance; reveal only via GET /requests/:id/contact; redact phone in /providers + filter /chat/conversations to assigned.
+- [Khadma catalog parity](khadma-catalog-parity.md) — provider pickers & customer browse share constants/serviceCatalog.ts; selection is slug-based, normalized to catalog on save so dispatch's skill-exact match works.
