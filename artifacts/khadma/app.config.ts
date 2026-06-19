@@ -8,7 +8,7 @@ const routerOrigin = apiDomain
   : "https://replit.com/";
 
 const config: ExpoConfig = {
-  name: "خدمة",
+  name: "Khadma",
   slug: "khadma",
   version: "1.0.0",
   orientation: "portrait",

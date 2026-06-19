@@ -41,7 +41,7 @@ export const translations = {
       slide4Desc: "خطوات بسيطة لحجز خدمتك",
     },
     role: {
-      appName: "خدمة",
+      appName: "Khadma",
       welcome: "مرحباً بك",
       subtitle: "اختر نوع الحساب المناسب لك",
       provider: "مقدم خدمة",
@@ -52,7 +52,7 @@ export const translations = {
       contactSub: "نحن هنا لمساعدتك",
     },
     auth: {
-      appName: "خدمة",
+      appName: "Khadma",
       welcomeBack: "أهلاً بعودتك",
       signIn: "تسجيل الدخول",
       signInSub: "أدخل بياناتك للمتابعة",
@@ -123,7 +123,7 @@ export const translations = {
       signOut: "تسجيل الخروج",
     },
     home: {
-      appName: "خدمة",
+      appName: "Khadma",
       goodEvening: "مساء الخير",
       weAreHere: "نحن هنا لخدمتك باحتراف",
       currentLocation: "موقعك الحالي",
