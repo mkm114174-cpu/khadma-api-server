@@ -1,4 +1,3 @@
-import { useAuth as useClerkAuth } from "@clerk/expo";
 import React, {
   createContext,
   useCallback,
@@ -16,6 +15,7 @@ import {
   setAuthTokenGetter,
   type User,
 } from "@workspace/api-client-react";
+import { authClient, getAccessToken, hasActiveSession } from "@/lib/neonAuth";
 
 export type AppRole = "customer" | "provider" | "admin";
 
@@ -25,7 +25,7 @@ type AuthStatus =
   | "needsProvision"
   | "ready"
   | "error"
-  | "guest"; // demo mode
+  | "guest";
 
 export interface ProvisionInput {
   name: string;
@@ -48,6 +48,7 @@ interface AuthContextValue {
   lng: number | null;
   provision: (input: ProvisionInput) => Promise<void>;
   refresh: () => Promise<void>;
+  refreshSession: () => Promise<void>;
   logout: () => Promise<void>;
   setGuest: (guest: boolean) => void;
 }
@@ -55,27 +56,35 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn, getToken, signOut } = useClerkAuth();
   const [user, setUser] = useState<User | null>(null);
   const [resolved, setResolved] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
   const [guestResolved, setGuestResolved] = useState(false);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [isSignedIn, setIsSignedIn] = useState(false);
 
-  // On mobile there is no browser cookie jar, so attach the Clerk session
-  // token as a bearer header to every generated API request.
   useEffect(() => {
-    setAuthTokenGetter(() => getToken());
+    setAuthTokenGetter(() => getAccessToken());
     return () => setAuthTokenGetter(null);
-  }, [getToken]);
+  }, []);
 
-  // Check for demo/guest mode
   useEffect(() => {
     AsyncStorage.getItem("khadma:demo").then((val) => {
       setIsGuest(val === "true");
       setGuestResolved(true);
     });
   }, []);
+
+  const refreshSession = useCallback(async () => {
+    const active = await hasActiveSession();
+    setIsSignedIn(active);
+    setSessionLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    void refreshSession();
+  }, [refreshSession]);
 
   const loadUser = useCallback(async () => {
     try {
@@ -85,11 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       setUser(null);
       if (err instanceof ApiError && err.status === 404) {
-        // Signed in with Clerk but no backend profile yet — needs provisioning.
         setLoadError(false);
       } else {
-        // Transient/auth failures (network, 5xx, 401) must not be mistaken
-        // for "needs provisioning" — surface a retryable error instead.
         console.error("Failed to load current user", err);
         setLoadError(true);
       }
@@ -99,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!sessionLoaded) return;
     if (isSignedIn) {
       setResolved(false);
       void loadUser();
@@ -108,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoadError(false);
       setResolved(true);
     }
-  }, [isLoaded, isSignedIn, loadUser]);
+  }, [sessionLoaded, isSignedIn, loadUser]);
 
   const provision = useCallback(async (input: ProvisionInput) => {
     const created = await provisionUser({
@@ -123,25 +129,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await signOut();
+    await authClient.signOut();
+    setIsSignedIn(false);
     setUser(null);
     setLoadError(false);
     setResolved(true);
-  }, [signOut]);
+  }, []);
 
   const status: AuthStatus =
-    !isLoaded || !guestResolved
+    !sessionLoaded || !guestResolved
       ? "loading"
       : isGuest
         ? "guest"
         : !isSignedIn
           ? "signedOut"
           : !resolved
-            ? // Signed in with Clerk but the backend profile fetch has not
-              // finished yet. Stay in loading instead of briefly reporting
-              // needsProvision, which would flash the registration screen and
-              // make a fresh login look like it failed the first time.
-              "loading"
+            ? "loading"
             : user
               ? "ready"
               : loadError
@@ -157,6 +160,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsGuest(guest);
   }, []);
 
+  const refresh = useCallback(async () => {
+    await refreshSession();
+    if (await hasActiveSession()) {
+      setResolved(false);
+      await loadUser();
+    }
+  }, [loadUser, refreshSession]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -169,18 +180,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lat: user?.lat ?? null,
       lng: user?.lng ?? null,
       provision,
-      refresh: loadUser,
+      refresh,
+      refreshSession,
       logout: async () => {
         await AsyncStorage.removeItem("khadma:demo");
         setIsGuest(false);
-        await signOut();
-        setUser(null);
-        setLoadError(false);
-        setResolved(true);
+        await logout();
       },
       setGuest,
     }),
-    [status, user, isGuest, provision, loadUser, signOut, setGuest],
+    [status, user, isGuest, provision, refresh, refreshSession, logout, setGuest],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

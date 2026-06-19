@@ -18,7 +18,8 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useUser } from "@clerk/expo";
+
+import { authClient } from "@/lib/neonAuth";
 
 import {
   ApiError,
@@ -79,15 +80,11 @@ export default function ProviderOnboarding({
   const queryClient = useQueryClient();
   const { name, phone: authPhone, logout, status, refresh } = useAuth();
   const { t, lang, isRTL } = useLang();
-  const { user: clerkUser } = useUser();
   const topInset = Platform.OS === "web" ? 40 : insets.top;
   const align = isRTL ? "right" : "left";
 
-  // Provider provisioning is merged into this single screen: when the account
-  // has not been provisioned yet, collect the name + agreements here and create
-  // the local user record before creating the provider profile.
   const needsProvision = !resubmit && status === "needsProvision";
-  const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? undefined;
+  const [sessionEmail, setSessionEmail] = useState<string | undefined>();
 
   const [regName, setRegName] = useState("");
   const [commissionAgreed, setCommissionAgreed] = useState(false);
@@ -95,12 +92,15 @@ export default function ProviderOnboarding({
   const [pledgeAgreed, setPledgeAgreed] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
 
-  // Prefill the name from the Clerk identity once it is available.
   useEffect(() => {
     if (!needsProvision) return;
-    const fromClerk = clerkUser?.fullName ?? clerkUser?.firstName ?? "";
-    if (fromClerk) setRegName((prev) => (prev ? prev : fromClerk));
-  }, [needsProvision, clerkUser?.fullName, clerkUser?.firstName]);
+    void authClient.getSession().then(({ data }) => {
+      const neonUser = data?.user;
+      if (neonUser?.email) setSessionEmail(neonUser.email);
+      const fromSession = neonUser?.name ?? "";
+      if (fromSession) setRegName((prev) => (prev ? prev : fromSession));
+    });
+  }, [needsProvision]);
 
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   // Custom skills proposed in this session. They start as pending, so they are
@@ -358,7 +358,7 @@ export default function ProviderOnboarding({
         await provisionUser({
           name: regName.trim(),
           role: "provider",
-          email: clerkEmail,
+          email: sessionEmail,
           commissionAgreed: true,
           language: lang,
         });

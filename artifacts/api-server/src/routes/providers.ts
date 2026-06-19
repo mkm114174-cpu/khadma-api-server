@@ -18,8 +18,8 @@ import {
 import {
   requireUser,
   getProviderByUserId,
-  getClerkUserId,
-  loadDbUserByClerkId,
+  getAuthUserId,
+  loadDbUserByAuthId,
   type AuthedRequest,
 } from "../lib/auth";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
@@ -89,13 +89,13 @@ const REJECTION_REASON_LABEL: Record<NotifLang, string> = {
 // accepted — anything else is rejected to prevent ACL-binding arbitrary paths.
 async function bindProviderDoc(
   rawPath: string,
-  ownerClerkUserId: string,
+  ownerAuthUserId: string,
 ): Promise<string> {
   if (!rawPath.startsWith("/objects/")) {
     throw new ObjectNotFoundError();
   }
   return objectStorageService.trySetObjectEntityAclPolicy(rawPath, {
-    owner: ownerClerkUserId,
+    owner: ownerAuthUserId,
     visibility: "private",
   });
 }
@@ -104,8 +104,8 @@ router.get("/providers", async (req: Request, res: Response): Promise<void> => {
   const parsed = ListProvidersQueryParams.safeParse(req.query);
   const q = parsed.success ? parsed.data : {};
   const requestedStatus = q.status ?? "approved";
-  const clerkUserId = getClerkUserId(req);
-  const viewer = clerkUserId ? await loadDbUserByClerkId(clerkUserId) : null;
+  const authUserId = await getAuthUserId(req);
+  const viewer = authUserId ? await loadDbUserByAuthId(authUserId) : null;
   const isAdmin = viewer?.role === "admin";
   // Only approved providers are public. Listing applicants (pending /
   // under_review / needs_info / rejected) exposes private application data, so
@@ -160,8 +160,8 @@ router.get(
       res.status(404).json({ error: "Not found" });
       return;
     }
-    const clerkUserId = getClerkUserId(req);
-    const viewer = clerkUserId ? await loadDbUserByClerkId(clerkUserId) : null;
+    const authUserId = await getAuthUserId(req);
+    const viewer = authUserId ? await loadDbUserByAuthId(authUserId) : null;
     const isAdmin = viewer?.role === "admin";
     const isOwner = viewer?.id === provider.userId;
     // Only approved providers are public. Fetching an applicant (pending /
@@ -187,7 +187,7 @@ router.post(
       return;
     }
     const user = (req as AuthedRequest).dbUser!;
-    const clerkUserId = (req as AuthedRequest).clerkUserId!;
+    const authUserId = (req as AuthedRequest).authUserId!;
     const existing = await getProviderByUserId(user.id);
     if (existing) {
       res.status(409).json({ error: "Provider profile already exists" });
@@ -215,10 +215,10 @@ router.post(
     let idPath: string;
     let murshePath: string | null = null;
     try {
-      paturPath = await bindProviderDoc(docOsekPaturPath, clerkUserId);
-      idPath = await bindProviderDoc(docIdPath, clerkUserId);
+      paturPath = await bindProviderDoc(docOsekPaturPath, authUserId);
+      idPath = await bindProviderDoc(docIdPath, authUserId);
       if (docOsekMurshePath) {
-        murshePath = await bindProviderDoc(docOsekMurshePath, clerkUserId);
+        murshePath = await bindProviderDoc(docOsekMurshePath, authUserId);
       }
     } catch (error) {
       if (error instanceof ObjectNotFoundError) {
@@ -267,7 +267,7 @@ router.patch(
       return;
     }
     const user = (req as AuthedRequest).dbUser!;
-    const clerkUserId = (req as AuthedRequest).clerkUserId!;
+    const authUserId = (req as AuthedRequest).authUserId!;
     const [provider] = await db
       .select()
       .from(providersTable)
@@ -312,7 +312,7 @@ router.patch(
         if (docOsekPaturPath !== undefined) {
           updates.docOsekPaturPath = await bindProviderDoc(
             docOsekPaturPath,
-            clerkUserId,
+            authUserId,
           );
           if (
             provider.docOsekPaturPath &&
@@ -322,7 +322,7 @@ router.patch(
           }
         }
         if (docIdPath !== undefined) {
-          updates.docIdPath = await bindProviderDoc(docIdPath, clerkUserId);
+          updates.docIdPath = await bindProviderDoc(docIdPath, authUserId);
           if (provider.docIdPath && provider.docIdPath !== updates.docIdPath) {
             filesToDelete.push(provider.docIdPath);
           }
@@ -330,7 +330,7 @@ router.patch(
         if (docOsekMurshePath !== undefined && docOsekMurshePath !== null) {
           updates.docOsekMurshePath = await bindProviderDoc(
             docOsekMurshePath,
-            clerkUserId,
+            authUserId,
           );
           if (
             provider.docOsekMurshePath &&

@@ -1176,11 +1176,11 @@ components:
 
     User:
       type: object
-      required: [id, clerkUserId, name, role, createdAt, updatedAt]
+      required: [id, authUserId, name, role, createdAt, updatedAt]
       properties:
         id:
           type: integer
-        clerkUserId:
+        authUserId:
           type: string
         name:
           type: string

@@ -1,4 +1,4 @@
-import { useAuth as useClerkAuth } from "@clerk/expo";
+import { getAccessToken } from "@/lib/neonAuth";
 import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
 import React, { useEffect } from "react";
 import { StyleProp, ViewStyle } from "react-native";
@@ -7,10 +7,8 @@ import { isPrivateStorageUrl, storageUrl } from "@/lib/storage";
 
 /**
  * Plays a request video served by the authenticated `/api/storage/objects/*`
- * route. Resolves the Clerk session token and attaches it as a bearer header
- * when the resolved URL is a private object on the trusted API origin — never
- * for arbitrary absolute URLs, which could leak the token to an
- * attacker-controlled host (mirrors AuthedImage).
+ * route. Attaches the Neon Auth bearer token when the URL is a private object
+ * on the trusted API origin.
  */
 export default function RequestVideo({
   objectPath,
@@ -19,7 +17,6 @@ export default function RequestVideo({
   objectPath: string | null | undefined;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { getToken } = useClerkAuth();
   const player = useVideoPlayer(null, (p) => {
     p.loop = false;
   });
@@ -31,7 +28,7 @@ export default function RequestVideo({
     (async () => {
       let source: VideoSource = { uri };
       if (isPrivateStorageUrl(uri)) {
-        const token = await getToken();
+        const token = await getAccessToken();
         source = {
           uri,
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -42,7 +39,7 @@ export default function RequestVideo({
     return () => {
       active = false;
     };
-  }, [objectPath, getToken, player]);
+  }, [objectPath, player]);
 
   if (!objectPath) return null;
 

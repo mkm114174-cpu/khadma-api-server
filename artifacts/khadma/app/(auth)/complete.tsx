@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useUser } from "@clerk/expo";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,6 +18,7 @@ import { LogoIcon } from "@/components/LogoIcon";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useLang } from "@/context/LanguageContext";
+import { authClient } from "@/lib/neonAuth";
 
 export default function CompleteProfileScreen() {
   const C = useColors();
@@ -26,9 +26,9 @@ export default function CompleteProfileScreen() {
   const insets = useSafeAreaInsets();
   const { t, lang, isRTL } = useLang();
   const { provision, logout } = useAuth();
-  const { user } = useUser();
 
   const [name, setName] = useState("");
+  const [email, setEmail] = useState<string | undefined>();
   const [role, setRole] = useState<"customer" | "provider">("customer");
   const [roleLoaded, setRoleLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -42,11 +42,12 @@ export default function CompleteProfileScreen() {
         if (stored === "provider" || stored === "customer") setRole(stored);
       })
       .finally(() => setRoleLoaded(true));
-    const fullName = user?.fullName ?? user?.firstName ?? "";
-    if (fullName) setName(fullName);
-  }, [user?.fullName, user?.firstName]);
-
-  const email = user?.primaryEmailAddress?.emailAddress ?? undefined;
+    void authClient.getSession().then(({ data }) => {
+      const neonUser = data?.user;
+      if (neonUser?.name) setName(neonUser.name);
+      if (neonUser?.email) setEmail(neonUser.email);
+    });
+  }, []);
 
   const handleSubmit = async () => {
     if (name.trim().length < 2) {

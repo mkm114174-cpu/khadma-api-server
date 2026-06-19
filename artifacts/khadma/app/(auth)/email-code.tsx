@@ -1,4 +1,4 @@
-import { useClerk, useSignIn, useSignUp } from "@clerk/expo";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -15,12 +15,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
 
 import { LogoIcon } from "@/components/LogoIcon";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLang } from "@/context/LanguageContext";
+import { authClient } from "@/lib/neonAuth";
 
 const { width } = Dimensions.get("window");
 const STATIC_LANGUAGES = [
@@ -36,16 +38,9 @@ type Mode = "signIn" | "signUp";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function errorCode(error: unknown): string | undefined {
-  const e = error as { errors?: { code?: string }[]; code?: string } | null;
-  return e?.errors?.[0]?.code ?? e?.code;
-}
-
 function errorMessage(error: unknown): string | undefined {
-  const e = error as
-    | { errors?: { message?: string; longMessage?: string }[] }
-    | null;
-  return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message;
+  const e = error as { message?: string } | null;
+  return e?.message;
 }
 
 export default function EmailCodeScreen() {
@@ -54,10 +49,7 @@ export default function EmailCodeScreen() {
   const insets = useSafeAreaInsets();
   const { t, isRTL, setLang } = useLang();
   const router = useRouter();
-  const { signIn } = useSignIn();
-  const { signUp } = useSignUp();
-  const clerk = useClerk() as any;
-  const setActive = clerk?.setActive;
+  const { refreshSession } = useAuth();
 
   const [phase, setPhase] = useState<Phase>("email");
   const [mode, setMode] = useState<Mode>("signIn");
@@ -75,10 +67,11 @@ export default function EmailCodeScreen() {
     setError(null);
     const addr = email.trim().toLowerCase();
     try {
-      // Existing customers: send a sign-in code straight away.
-      const { error: signInError } = await signIn.emailCode.sendCode({
-        emailAddress: addr,
-      });
+      const { error: signInError } =
+        await authClient.emailOtp.sendVerificationOtp({
+          email: addr,
+          type: "sign-in",
+        });
 
       if (!signInError) {
         setMode("signIn");
@@ -86,24 +79,29 @@ export default function EmailCodeScreen() {
         return;
       }
 
-      // No account yet → create one and send a verification code instead.
-      if (errorCode(signInError) === "form_identifier_not_found") {
-        const { error: createError } = await signUp.create({ emailAddress: addr });
-        if (createError) {
-          setError(errorMessage(createError) ?? t.auth.signupFailed);
-          return;
-        }
-        const { error: sendError } = await signUp.verifications.sendEmailCode();
-        if (sendError) {
-          setError(errorMessage(sendError) ?? t.auth.serverError);
-          return;
-        }
-        setMode("signUp");
-        setPhase("code");
+      const tempPassword = Crypto.randomUUID();
+      const { error: signUpError } = await authClient.signUp.email({
+        email: addr,
+        password: tempPassword,
+        name: addr.split("@")[0] ?? "User",
+      });
+      if (signUpError) {
+        setError(errorMessage(signUpError) ?? t.auth.signupFailed);
         return;
       }
 
-      setError(errorMessage(signInError) ?? t.auth.serverError);
+      const { error: verifySendError } =
+        await authClient.emailOtp.sendVerificationOtp({
+          email: addr,
+          type: "email-verification",
+        });
+      if (verifySendError) {
+        setError(errorMessage(verifySendError) ?? t.auth.serverError);
+        return;
+      }
+
+      setMode("signUp");
+      setPhase("code");
     } catch (err) {
       console.error("sendCode failed:", err);
       setError(t.auth.serverError);
@@ -116,12 +114,12 @@ export default function EmailCodeScreen() {
     if (busy) return;
     setBusy(true);
     setError(null);
+    const addr = email.trim().toLowerCase();
     try {
-      if (mode === "signIn") {
-        await signIn.emailCode.sendCode({ emailAddress: email.trim().toLowerCase() });
-      } else {
-        await signUp.verifications.sendEmailCode();
-      }
+      await authClient.emailOtp.sendVerificationOtp({
+        email: addr,
+        type: mode === "signIn" ? "sign-in" : "email-verification",
+      });
     } catch (err) {
       console.error("resend failed:", err);
     } finally {
@@ -133,33 +131,28 @@ export default function EmailCodeScreen() {
     if (!codeValid || busy) return;
     setBusy(true);
     setError(null);
+    const addr = email.trim().toLowerCase();
     const value = code.trim();
     try {
       if (mode === "signIn") {
-        const { error: verifyError } = await signIn.emailCode.verifyCode({ code: value });
-        if (verifyError) {
-          setError(t.auth.invalidCode);
-          return;
-        }
-        if (signIn.status !== "complete") {
-          setError(t.auth.loginFailed);
-          return;
-        }
-      } else {
-        const { error: verifyError } = await signUp.verifications.verifyEmailCode({
-          code: value,
+        const { error: verifyError } = await authClient.signIn.emailOtp({
+          email: addr,
+          otp: value,
         });
         if (verifyError) {
           setError(t.auth.invalidCode);
           return;
         }
-        if (signUp.status !== "complete") {
-          setError(t.auth.signupFailed);
+      } else {
+        const { error: verifyError } = await authClient.emailOtp.verifyEmail({
+          email: addr,
+          otp: value,
+        });
+        if (verifyError) {
+          setError(t.auth.invalidCode);
           return;
         }
       }
-
-      // Code accepted — show language selection before welcome splash
       setPhase("language");
     } catch (err) {
       console.error("verify failed:", err);
@@ -170,38 +163,14 @@ export default function EmailCodeScreen() {
   };
 
   const enterApp = useCallback(async () => {
-    console.log("[enterApp] mode=", mode, "signUp.status=", signUp?.status, "signUp.createdSessionId=", signUp?.createdSessionId, "signIn.status=", signIn?.status, "signIn.createdSessionId=", signIn?.createdSessionId);
     try {
-      if (mode === "signUp" && signUp.status === "complete" && signUp.createdSessionId) {
-        console.log("[enterApp] calling setActive for signUp");
-        await setActive({ session: signUp.createdSessionId });
-        console.log("[enterApp] setActive done");
-      } else if (mode === "signIn" && signIn.status === "complete" && signIn.createdSessionId) {
-        console.log("[enterApp] calling setActive for signIn");
-        await setActive({ session: signIn.createdSessionId });
-        console.log("[enterApp] setActive done");
-      } else {
-        console.log("[enterApp] no active session, trying finalize");
-        if (mode === "signUp" && signUp.finalize) {
-          await signUp.finalize({
-            navigate: () => {
-              console.log("[enterApp] finalize navigate called");
-            },
-          });
-        } else if (mode === "signIn" && signIn.finalize) {
-          await signIn.finalize({
-            navigate: () => {
-              console.log("[enterApp] finalize navigate called");
-            },
-          });
-        }
-      }
+      await refreshSession();
     } catch (err) {
       console.error("[enterApp] failed:", err);
       setError(t.auth.finalizeFailed);
       setPhase("code");
     }
-  }, [mode, signUp, signIn, setActive, t.auth.finalizeFailed]);
+  }, [refreshSession, t.auth.finalizeFailed]);
 
   if (phase === "language") {
     return (
@@ -228,7 +197,11 @@ export default function EmailCodeScreen() {
               >
                 <View style={stylesLang.langInfo}>
                   <Text style={stylesLang.langLabel}>
-                    {lang.id === "ar" ? t.langPicker.arabic : lang.id === "he" ? t.langPicker.hebrew : t.langPicker.english}
+                    {lang.id === "ar"
+                      ? t.langPicker.arabic
+                      : lang.id === "he"
+                        ? t.langPicker.hebrew
+                        : t.langPicker.english}
                   </Text>
                 </View>
                 <View style={stylesLang.chevron}>
@@ -293,15 +266,14 @@ export default function EmailCodeScreen() {
               onPress={sendCode}
               disabled={!emailValid || busy}
             >
-              <Text style={styles.btnText}>{busy ? t.auth.sending : t.auth.sendCode}</Text>
+              <Text style={styles.btnText}>
+                {busy ? t.auth.sending : t.auth.sendCode}
+              </Text>
             </Pressable>
 
             <Pressable onPress={() => router.back()}>
               <Text style={styles.backLink}>{t.auth.back}</Text>
             </Pressable>
-
-            {/* Required for sign-up — Clerk bot protection is enabled by default */}
-            <View nativeID="clerk-captcha" />
           </View>
         ) : (
           <View style={styles.card}>
@@ -315,7 +287,7 @@ export default function EmailCodeScreen() {
               value={code}
               placeholder="------"
               placeholderTextColor={C.mutedForeground}
-              onChangeText={(t) => setCode(t.replace(/[^0-9]/g, ""))}
+              onChangeText={(v) => setCode(v.replace(/[^0-9]/g, ""))}
               keyboardType="number-pad"
               textAlign="center"
               maxLength={6}
@@ -331,7 +303,9 @@ export default function EmailCodeScreen() {
               onPress={verify}
               disabled={!codeValid || busy}
             >
-              <Text style={styles.btnText}>{busy ? t.auth.verifying : t.auth.verify}</Text>
+              <Text style={styles.btnText}>
+                {busy ? t.auth.verifying : t.auth.verify}
+              </Text>
             </Pressable>
 
             <Pressable onPress={resend} disabled={busy}>
@@ -357,9 +331,19 @@ export default function EmailCodeScreen() {
 const makeStyles = (C: ReturnType<typeof useColors>) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: C.background },
-    scroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, gap: 24 },
+    scroll: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      gap: 24,
+    },
     logoWrap: { alignItems: "center", gap: 8 },
-    appName: { fontSize: 28, fontWeight: "700", color: C.foreground, letterSpacing: 1 },
+    appName: {
+      fontSize: 28,
+      fontWeight: "700",
+      color: C.foreground,
+      letterSpacing: 1,
+    },
     roleBadge: {
       flexDirection: "row-reverse",
       alignItems: "center",
@@ -380,8 +364,18 @@ const makeStyles = (C: ReturnType<typeof useColors>) =>
       borderWidth: 1,
       borderColor: C.border,
     },
-    heading: { fontSize: 22, fontWeight: "700", color: C.foreground, textAlign: "right" },
-    subheading: { fontSize: 14, color: C.mutedForeground, textAlign: "right", lineHeight: 21 },
+    heading: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: C.foreground,
+      textAlign: "right",
+    },
+    subheading: {
+      fontSize: 14,
+      color: C.mutedForeground,
+      textAlign: "right",
+      lineHeight: 21,
+    },
     input: {
       fontSize: 16,
       color: C.foreground,
@@ -392,7 +386,12 @@ const makeStyles = (C: ReturnType<typeof useColors>) =>
       paddingHorizontal: 14,
       paddingVertical: 14,
     },
-    codeInput: { fontSize: 28, letterSpacing: 8, fontWeight: "700", paddingVertical: 16 },
+    codeInput: {
+      fontSize: 28,
+      letterSpacing: 8,
+      fontWeight: "700",
+      paddingVertical: 16,
+    },
     error: { color: "#ff6b6b", fontSize: 13, textAlign: "right" },
     btn: {
       backgroundColor: C.primary,
@@ -403,7 +402,12 @@ const makeStyles = (C: ReturnType<typeof useColors>) =>
     },
     btnDisabled: { opacity: 0.4 },
     btnText: { fontSize: 17, fontWeight: "700", color: "#000" },
-    resend: { color: C.primary, fontSize: 14, textAlign: "center", fontWeight: "600" },
+    resend: {
+      color: C.primary,
+      fontSize: 14,
+      textAlign: "center",
+      fontWeight: "600",
+    },
     backLink: { color: C.mutedForeground, fontSize: 14, textAlign: "center" },
   });
 
@@ -465,11 +469,6 @@ const stylesLang = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     color: "#FFFFFF",
-  },
-  langDir: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.5)",
-    marginTop: 2,
   },
   chevron: {
     width: 36,

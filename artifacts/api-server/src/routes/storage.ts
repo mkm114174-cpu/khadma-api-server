@@ -96,9 +96,9 @@ router.get(
       const objectPath = `/objects/${wildcardPath}`;
       const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
-      const clerkUserId = (req as AuthedRequest).clerkUserId;
+      const authUserId = (req as AuthedRequest).authUserId;
       const canAccess = await objectStorageService.canAccessObjectEntity({
-        userId: clerkUserId,
+        userId: authUserId,
         objectFile,
         requestedPermission: ObjectPermission.READ,
       });

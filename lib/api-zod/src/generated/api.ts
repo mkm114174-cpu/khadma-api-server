@@ -22,7 +22,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const GetCurrentUserResponse = zod.object({
   "id": zod.number(),
-  "clerkUserId": zod.string(),
+  "authUserId": zod.string(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -54,7 +54,7 @@ export const UpdateCurrentUserBody = zod.object({
 
 export const UpdateCurrentUserResponse = zod.object({
   "id": zod.number(),
-  "clerkUserId": zod.string(),
+  "authUserId": zod.string(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -87,7 +87,7 @@ export const ProvisionUserBody = zod.object({
 
 export const ProvisionUserResponse = zod.object({
   "id": zod.number(),
-  "clerkUserId": zod.string(),
+  "authUserId": zod.string(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),

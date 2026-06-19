@@ -1,5 +1,4 @@
-import { useSSO } from "@clerk/expo";
-import * as AuthSession from "expo-auth-session";
+import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -10,18 +9,18 @@ import {
   Text,
 } from "react-native";
 
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { authClient } from "@/lib/neonAuth";
 
-// Handle any pending authentication sessions.
 WebBrowser.maybeCompleteAuthSession();
 
 export function GoogleAuthButton({ label }: { label?: string }) {
   const C = useColors();
   const styles = React.useMemo(() => makeStyles(C), [C]);
-  const { startSSOFlow } = useSSO();
+  const { refreshSession } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  // Preloads the browser for Android to reduce authentication load time.
   useEffect(() => {
     if (Platform.OS !== "android") return;
     void WebBrowser.warmUpAsync();
@@ -33,20 +32,22 @@ export function GoogleAuthButton({ label }: { label?: string }) {
   const onPress = useCallback(async () => {
     try {
       setLoading(true);
-      const { createdSessionId, setActive } = await startSSOFlow({
-        strategy: "oauth_google",
-        redirectUrl: AuthSession.makeRedirectUri(),
+      const callbackURL = Linking.createURL("/");
+      const { error } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL,
       });
-
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
+      if (error) {
+        console.error("Google sign-in failed:", error);
+        return;
       }
+      await refreshSession();
     } catch (err) {
-      console.error("Google SSO failed:", JSON.stringify(err, null, 2));
+      console.error("Google SSO failed:", err);
     } finally {
       setLoading(false);
     }
-  }, [startSSOFlow]);
+  }, [refreshSession]);
 
   return (
     <Pressable
@@ -66,19 +67,20 @@ export function GoogleAuthButton({ label }: { label?: string }) {
   );
 }
 
-const makeStyles = (C: ReturnType<typeof useColors>) => StyleSheet.create({
-  btn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: C.card,
-    borderRadius: 12,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  btnDisabled: { opacity: 0.5 },
-  icon: { fontSize: 18, fontWeight: "700", color: C.foreground },
-  text: { fontSize: 15, fontWeight: "600", color: C.foreground },
-});
+const makeStyles = (C: ReturnType<typeof useColors>) =>
+  StyleSheet.create({
+    btn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      backgroundColor: C.card,
+      borderRadius: 12,
+      paddingVertical: 14,
+      borderWidth: 1,
+      borderColor: C.border,
+    },
+    btnDisabled: { opacity: 0.5 },
+    icon: { fontSize: 18, fontWeight: "700", color: C.foreground },
+    text: { fontSize: 15, fontWeight: "600", color: C.foreground },
+  });

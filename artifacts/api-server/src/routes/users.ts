@@ -19,11 +19,11 @@ router.post(
       res.status(400).json({ error: "Invalid input" });
       return;
     }
-    const clerkUserId = (req as AuthedRequest).clerkUserId!;
+    const authUserId = (req as AuthedRequest).authUserId!;
     const [existing] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.clerkUserId, clerkUserId))
+      .where(eq(usersTable.authUserId, authUserId))
       .limit(1);
     if (existing) {
       res.json(existing);
@@ -39,7 +39,7 @@ router.post(
     const [created] = await db
       .insert(usersTable)
       .values({
-        clerkUserId,
+        authUserId,
         name,
         role,
         email: email ?? null,

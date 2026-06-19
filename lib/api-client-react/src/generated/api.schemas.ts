@@ -43,7 +43,7 @@ export const UserRole = {
 
 export interface User {
   id: number;
-  clerkUserId: string;
+  authUserId: string;
   name: string;
   /** @nullable */
   email?: string | null;

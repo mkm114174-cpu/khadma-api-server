@@ -38,13 +38,13 @@ const objectStorageService = new ObjectStorageService();
  */
 async function bindRequestImage(
   imageUrl: string | null | undefined,
-  ownerClerkUserId: string,
+  ownerAuthUserId: string,
   log: AuthedRequest["log"],
 ): Promise<string | null> {
   if (!imageUrl) return null;
   try {
     return await objectStorageService.trySetObjectEntityAclPolicy(imageUrl, {
-      owner: ownerClerkUserId,
+      owner: ownerAuthUserId,
       visibility: "public",
     });
   } catch (err) {
@@ -322,12 +322,12 @@ router.post(
     }
     const imageUrl = await bindRequestImage(
       d.imageUrl,
-      authed.clerkUserId!,
+      authed.authUserId!,
       authed.log,
     );
     const videoUrl = await bindRequestImage(
       d.videoUrl,
-      authed.clerkUserId!,
+      authed.authUserId!,
       authed.log,
     );
     const [created] = await db

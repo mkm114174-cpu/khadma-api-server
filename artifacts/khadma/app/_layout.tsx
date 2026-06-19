@@ -5,8 +5,6 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
-import { ClerkLoaded, ClerkProvider } from "@clerk/expo";
-import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -38,9 +36,6 @@ SystemUI.setBackgroundColorAsync("#0D0D0D");
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 if (domain) setBaseUrl(`https://${domain}`);
-
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
-const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
 const queryClient = new QueryClient();
 
@@ -235,27 +230,19 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <ClerkProvider
-          publishableKey={publishableKey}
-          tokenCache={tokenCache}
-          proxyUrl={proxyUrl}
-        >
-          <ClerkLoaded>
-            <QueryClientProvider client={queryClient}>
-              <AuthProvider>
-                <ThemeProvider>
-                  <LanguageProvider>
-                    <GestureHandlerRootView>
-                      <KeyboardProvider>
-                        <AuthGate />
-                      </KeyboardProvider>
-                    </GestureHandlerRootView>
-                  </LanguageProvider>
-                </ThemeProvider>
-              </AuthProvider>
-            </QueryClientProvider>
-          </ClerkLoaded>
-        </ClerkProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ThemeProvider>
+              <LanguageProvider>
+                <GestureHandlerRootView>
+                  <KeyboardProvider>
+                    <AuthGate />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </LanguageProvider>
+            </ThemeProvider>
+          </AuthProvider>
+        </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

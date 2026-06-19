@@ -5,8 +5,8 @@ import {
   requireUser,
   requireRole,
   getProviderByUserId,
-  getClerkUserId,
-  loadDbUserByClerkId,
+  getAuthUserId,
+  loadDbUserByAuthId,
   type AuthedRequest,
 } from "../lib/auth";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -61,8 +61,8 @@ router.get("/skills", async (req: Request, res: Response): Promise<void> => {
 
   // Non-approved statuses (pending/rejected/all) are admin-only review views.
   if (statusFilter !== "approved") {
-    const clerkUserId = getClerkUserId(req);
-    const user = clerkUserId ? await loadDbUserByClerkId(clerkUserId) : null;
+    const authUserId = await getAuthUserId(req);
+    const user = authUserId ? await loadDbUserByAuthId(authUserId) : null;
     if (!user || user.role !== "admin") {
       res.status(403).json({ error: "Forbidden" });
       return;
@@ -148,8 +148,8 @@ router.get("/skills/:id", async (req: Request, res: Response): Promise<void> => 
   }
   // Only approved skills are public. Pending/rejected detail is admin-only.
   if (skill.status !== "approved") {
-    const clerkUserId = getClerkUserId(req);
-    const user = clerkUserId ? await loadDbUserByClerkId(clerkUserId) : null;
+    const authUserId = await getAuthUserId(req);
+    const user = authUserId ? await loadDbUserByAuthId(authUserId) : null;
     if (!user || user.role !== "admin") {
       res.status(404).json({ error: "Not found" });
       return;
@@ -219,10 +219,10 @@ router.patch(
 
     // Make an attached image publicly readable so customers can load it.
     if (typeof update.image === "string" && update.image.length > 0) {
-      const adminClerkId = (req as AuthedRequest).clerkUserId!;
+      const adminAuthUserId = (req as AuthedRequest).authUserId!;
       try {
         await objectStorageService.trySetObjectEntityAclPolicy(update.image as string, {
-          owner: adminClerkId,
+          owner: adminAuthUserId,
           visibility: "public",
         });
       } catch (err) {

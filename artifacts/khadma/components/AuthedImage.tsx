@@ -1,4 +1,4 @@
-import { useAuth as useClerkAuth } from "@clerk/expo";
+import { getAccessToken } from "@/lib/neonAuth";
 import { Image, type ImageStyle } from "expo-image";
 import React, { useEffect, useState } from "react";
 import { StyleProp } from "react-native";
@@ -21,7 +21,6 @@ export default function AuthedImage({
   style?: StyleProp<ImageStyle>;
   contentFit?: "cover" | "contain";
 }) {
-  const { getToken } = useClerkAuth();
   const [token, setToken] = useState<string | null>(null);
 
   const uri = storageUrl(objectPath);
@@ -30,14 +29,14 @@ export default function AuthedImage({
   useEffect(() => {
     let active = true;
     if (uri && isPrivate) {
-      getToken().then((t) => {
+      getAccessToken().then((t) => {
         if (active) setToken(t ?? null);
       });
     }
     return () => {
       active = false;
     };
-  }, [uri, isPrivate, getToken]);
+  }, [uri, isPrivate]);
 
   if (!uri) return null;
   if (!isPrivate) {
