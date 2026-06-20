@@ -15,7 +15,7 @@ const config: ExpoConfig = {
   icon: "./assets/images/icon.png",
   scheme: "khadma",
   userInterfaceStyle: "dark",
-  newArchEnabled: false,
+  newArchEnabled: true,
   splash: {
     image: "./assets/images/icon.png",
     resizeMode: "contain",
