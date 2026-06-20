@@ -226,7 +226,13 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={styles.bootScreen}>
+        <ActivityIndicator size="large" color="#C8A574" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -236,7 +242,7 @@ export default function RootLayout() {
             <AuthProvider>
               <ThemeProvider>
                 <LanguageProvider>
-                  <GestureHandlerRootView>
+                  <GestureHandlerRootView style={styles.root}>
                     <KeyboardProvider>
                       <AuthGate />
                     </KeyboardProvider>
@@ -250,3 +256,13 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  bootScreen: {
+    flex: 1,
+    backgroundColor: "#0D0D0D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
