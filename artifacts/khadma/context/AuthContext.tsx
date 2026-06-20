@@ -55,6 +55,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+/** Never block the UI longer than this while checking auth on launch. */
+const BOOT_TIMEOUT_MS = 6_000;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [resolved, setResolved] = useState(false);
@@ -70,21 +73,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem("khadma:demo").then((val) => {
-      setIsGuest(val === "true");
-      setGuestResolved(true);
-    });
+    AsyncStorage.getItem("khadma:demo")
+      .then((val) => {
+        setIsGuest(val === "true");
+      })
+      .catch(() => {
+        setIsGuest(false);
+      })
+      .finally(() => {
+        setGuestResolved(true);
+      });
   }, []);
 
   const refreshSession = useCallback(async () => {
-    const active = await hasActiveSession();
-    setIsSignedIn(active);
-    setSessionLoaded(true);
+    try {
+      const active = await hasActiveSession();
+      setIsSignedIn(active);
+    } catch (err) {
+      console.warn("[Auth] session check failed", err);
+      setIsSignedIn(false);
+    } finally {
+      setSessionLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
+
+  // Safety net: never leave the splash/loading overlay up forever on slow networks.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSessionLoaded(true);
+      setGuestResolved(true);
+    }, BOOT_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const loadUser = useCallback(async () => {
     try {
@@ -129,7 +153,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await authClient.signOut();
+    try {
+      await authClient.signOut();
+    } catch (err) {
+      console.warn("[Auth] signOut failed", err);
+    }
     setIsSignedIn(false);
     setUser(null);
     setLoadError(false);
