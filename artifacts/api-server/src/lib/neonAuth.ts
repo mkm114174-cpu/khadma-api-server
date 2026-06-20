@@ -39,3 +39,8 @@ export function getAuthUserIdFromPayload(payload: JWTPayload): string | null {
   const sub = payload.sub;
   return typeof sub === "string" && sub.length > 0 ? sub : null;
 }
+
+export function getEmailFromPayload(payload: JWTPayload): string | null {
+  const email = payload.email;
+  return typeof email === "string" && email.includes("@") ? email : null;
+}
