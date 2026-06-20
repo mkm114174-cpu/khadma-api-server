@@ -55,6 +55,7 @@ export default function EmailCodeScreen() {
   const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,18 +75,21 @@ export default function EmailCodeScreen() {
         });
 
       if (!signInError) {
+        setSignUpPassword(null);
         setMode("signIn");
         setPhase("code");
         return;
       }
 
       const tempPassword = Crypto.randomUUID();
+      setSignUpPassword(tempPassword);
       const { error: signUpError } = await authClient.signUp.email({
         email: addr,
         password: tempPassword,
         name: addr.split("@")[0] ?? "User",
       });
       if (signUpError) {
+        setSignUpPassword(null);
         setError(errorMessage(signUpError) ?? t.auth.signupFailed);
         return;
       }
@@ -152,7 +156,19 @@ export default function EmailCodeScreen() {
           setError(t.auth.invalidCode);
           return;
         }
+
+        // verifyEmail confirms the address but does not always create a session.
+        const { error: signInError } = await authClient.signIn.email({
+          email: addr,
+          password: signUpPassword ?? "",
+        });
+        if (signInError) {
+          setError(t.auth.loginFailed);
+          return;
+        }
       }
+
+      await refreshSession();
       setPhase("language");
     } catch (err) {
       console.error("verify failed:", err);

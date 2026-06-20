@@ -744,6 +744,12 @@ export const translations = {
       verifyFailed: "Could not verify code, try again",
       finalizeFailed: "Could not complete sign in, try again",
     },
+    layout: {
+      errorTitle: "Could not load your account",
+      errorBody: "Something went wrong while connecting to the server. Check your connection and try again.",
+      retry: "Try Again",
+      signOut: "Sign Out",
+    },
     home: {
       appName: "Khadma",
       goodEvening: "Good Evening",
@@ -1334,6 +1340,12 @@ export const translations = {
       signupFailed: "לא ניתן להשלים את ההרשמה, נסה שוב מאוחר יותר",
       verifyFailed: "לא ניתן לאמת את הקוד, נסה שוב",
       finalizeFailed: "לא ניתן להשלים את ההתחברות, נסה שוב",
+    },
+    layout: {
+      errorTitle: "לא ניתן לטעון את החשבון שלך",
+      errorBody: "אירעה שגיאה בעת ההתחברות לשרת. בדוק את החיבור ונסה שוב.",
+      retry: "נסה שוב",
+      signOut: "התנתק",
     },
     role: {
       appName: "Khadma",
