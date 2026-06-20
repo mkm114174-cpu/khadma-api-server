@@ -23,6 +23,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ConfigGuard } from "@/components/ConfigGuard";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { usePresenceHeartbeat } from "@/hooks/usePresence";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -230,19 +231,21 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <ThemeProvider>
-              <LanguageProvider>
-                <GestureHandlerRootView>
-                  <KeyboardProvider>
-                    <AuthGate />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </LanguageProvider>
-            </ThemeProvider>
-          </AuthProvider>
-        </QueryClientProvider>
+        <ConfigGuard>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <ThemeProvider>
+                <LanguageProvider>
+                  <GestureHandlerRootView>
+                    <KeyboardProvider>
+                      <AuthGate />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </LanguageProvider>
+              </ThemeProvider>
+            </AuthProvider>
+          </QueryClientProvider>
+        </ConfigGuard>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

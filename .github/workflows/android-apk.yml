@@ -2,6 +2,15 @@ name: Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      api_domain:
+        description: "API hostname (no https), e.g. your-app.pike.replit.dev"
+        required: true
+        type: string
+      neon_auth_url:
+        description: "Neon Auth URL from Neon Console"
+        required: true
+        type: string
   push:
     branches: [master, main]
     paths:
@@ -30,29 +39,50 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve production env
+        id: prodenv
+        env:
+          VAR_DOMAIN: ${{ vars.EXPO_PUBLIC_DOMAIN }}
+          VAR_NEON: ${{ vars.EXPO_PUBLIC_NEON_AUTH_URL }}
+          INPUT_DOMAIN: ${{ github.event.inputs.api_domain }}
+          INPUT_NEON: ${{ github.event.inputs.neon_auth_url }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "domain=${INPUT_DOMAIN}" >> "$GITHUB_OUTPUT"
+            echo "neon=${INPUT_NEON}" >> "$GITHUB_OUTPUT"
+          elif [ -n "$VAR_DOMAIN" ] && [ -n "$VAR_NEON" ]; then
+            echo "domain=${VAR_DOMAIN}" >> "$GITHUB_OUTPUT"
+            echo "neon=${VAR_NEON}" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping APK — set repo variables EXPO_PUBLIC_DOMAIN and EXPO_PUBLIC_NEON_AUTH_URL, or run workflow manually with inputs."
+          fi
+
       - name: Setup Java
+        if: steps.prodenv.outputs.skip != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
       - name: Setup Android SDK
+        if: steps.prodenv.outputs.skip != 'true'
         uses: android-actions/setup-android@v3
 
       - name: Build APK with Gradle
+        if: steps.prodenv.outputs.skip != 'true'
         working-directory: artifacts/khadma
         env:
-          EXPO_PUBLIC_DOMAIN: ${{ vars.EXPO_PUBLIC_DOMAIN }}
-          EXPO_PUBLIC_NEON_AUTH_URL: ${{ vars.EXPO_PUBLIC_NEON_AUTH_URL }}
+          EXPO_PUBLIC_DOMAIN: ${{ steps.prodenv.outputs.domain }}
+          EXPO_PUBLIC_NEON_AUTH_URL: ${{ steps.prodenv.outputs.neon }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           NODE_ENV: production
         run: |
-          export EXPO_PUBLIC_DOMAIN="${EXPO_PUBLIC_DOMAIN:-localhost}"
-          export EXPO_PUBLIC_NEON_AUTH_URL="${EXPO_PUBLIC_NEON_AUTH_URL:-}"
           export GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY:-placeholder}"
           node scripts/build-android.mjs --force
 
       - name: Upload APK
+        if: steps.prodenv.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: khadma-release-apk

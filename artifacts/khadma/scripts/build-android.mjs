@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateReleaseEnv } from "./validate-release-env.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "..");
@@ -66,8 +67,12 @@ Use one of these instead:
 
 loadEnv(path.join(workRoot, ".env"));
 
-process.env.EXPO_PUBLIC_DOMAIN ??= "localhost";
-process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ??= "pk_test_placeholder";
+if (!isDebug) {
+  validateReleaseEnv(process.env);
+} else {
+  process.env.EXPO_PUBLIC_DOMAIN ??= "localhost";
+}
+
 process.env.GOOGLE_MAPS_API_KEY ??= "placeholder";
 
 const sdk =
