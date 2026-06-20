@@ -10,7 +10,7 @@ const routerOrigin = apiDomain
 const config: ExpoConfig = {
   name: "Khadma",
   slug: "khadma",
-  version: "1.0.4",
+  version: "1.0.5",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "khadma",
@@ -33,7 +33,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.khadma.app",
-    versionCode: 5,
+    versionCode: 6,
     adaptiveIcon: {
       foregroundImage: "./assets/images/icon.png",
       backgroundColor: "#0D0D0D",
