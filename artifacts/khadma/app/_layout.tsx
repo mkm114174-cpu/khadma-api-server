@@ -19,7 +19,6 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -243,9 +242,7 @@ export default function RootLayout() {
               <ThemeProvider>
                 <LanguageProvider>
                   <GestureHandlerRootView style={styles.root}>
-                    <KeyboardProvider>
-                      <AuthGate />
-                    </KeyboardProvider>
+                    <AuthGate />
                   </GestureHandlerRootView>
                 </LanguageProvider>
               </ThemeProvider>
