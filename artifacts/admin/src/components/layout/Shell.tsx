@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { LayoutDashboard, Users, ClipboardList, MessageSquare, Wallet, LogOut, Search, Menu, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useClerk } from "@clerk/react";
+import { useAuthSession } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,11 @@ const NAV_ITEMS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { signOut } = useClerk();
+  const { logout } = useAuthSession();
 
   const handleSignOut = () => {
-    signOut({ redirectUrl: import.meta.env.BASE_URL.replace(/\/$/, "") || "/" });
+    void logout();
+    window.location.href = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
   };
 
   const NavLinks = ({ className, onItemClick }: { className?: string, onItemClick?: () => void }) => (

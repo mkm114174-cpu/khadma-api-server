@@ -22,6 +22,9 @@ build = [ "pnpm", "--filter", "@workspace/admin", "run", "build" ]
 publicDir = "artifacts/admin/dist/public"
 serve = "static"
 
+[services.production.build.env]
+VITE_NEON_AUTH_URL = "$NEON_AUTH_BASE_URL"
+
 [[services.production.rewrites]]
 from = "/*"
 to = "/index.html"
@@ -29,3 +32,4 @@ to = "/index.html"
 [services.env]
 PORT = "23744"
 BASE_PATH = "/admin/"
+VITE_NEON_AUTH_URL = "$NEON_AUTH_BASE_URL"

@@ -1,7 +1,8 @@
-import { useAuth, useClerk, RedirectToSignIn } from "@clerk/react";
+import { Redirect } from "wouter";
 import { useGetCurrentUser } from "@workspace/api-client-react";
 import { Loader2, ShieldAlert, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuthSession } from "@/context/AuthContext";
 
 function getErrorStatus(error: unknown): number | undefined {
   if (error && typeof error === "object" && "status" in error) {
@@ -23,18 +24,15 @@ function FullScreenLoader() {
 }
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { sessionLoaded, isSignedIn, logout } = useAuthSession();
   const { data: user, isLoading, error, refetch, isFetching } = useGetCurrentUser();
-  const { signOut } = useClerk();
 
-  // Wait for Clerk to determine auth state before deciding anything.
-  if (!isLoaded) {
+  if (!sessionLoaded) {
     return <FullScreenLoader />;
   }
 
-  // Signed-out users hitting a protected route → send them to sign-in.
   if (!isSignedIn) {
-    return <RedirectToSignIn />;
+    return <Redirect to="/sign-in" />;
   }
 
   if (isLoading) {
@@ -43,12 +41,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const status = getErrorStatus(error);
 
-  // Session lost / token rejected → treat as signed-out, redirect to sign-in.
   if (status === 401) {
-    return <RedirectToSignIn />;
+    return <Redirect to="/sign-in" />;
   }
 
-  // Network / 5xx / unknown error → retryable error state (NOT access denied)
   if (error && status !== 404) {
     return (
       <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-background p-4 text-center">
@@ -75,7 +71,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // user not provisioned (404) or not an admin → access denied
   if (!user || user.role !== "admin") {
     return (
       <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-background p-4 text-center">
@@ -87,11 +82,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">غير مصرح لك</h1>
             <p className="text-muted-foreground">هذه اللوحة مخصّصة للمسؤولين فقط. حسابك الحالي لا يملك الصلاحيات الكافية للوصول.</p>
           </div>
-          <Button 
-            variant="default" 
-            size="lg" 
-            className="w-full font-bold" 
-            onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL.replace(/\/$/, "") || "/" })}
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full font-bold"
+            onClick={() => void logout()}
           >
             تسجيل الخروج
           </Button>
