@@ -19,7 +19,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -43,12 +43,12 @@ jobs:
         working-directory: artifacts/khadma
         env:
           EXPO_PUBLIC_DOMAIN: ${{ vars.EXPO_PUBLIC_DOMAIN }}
-          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_NEON_AUTH_URL: ${{ vars.EXPO_PUBLIC_NEON_AUTH_URL }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           NODE_ENV: production
         run: |
           export EXPO_PUBLIC_DOMAIN="${EXPO_PUBLIC_DOMAIN:-localhost}"
-          export EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY="${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY:-pk_test_placeholder}"
+          export EXPO_PUBLIC_NEON_AUTH_URL="${EXPO_PUBLIC_NEON_AUTH_URL:-}"
           export GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY:-placeholder}"
           node scripts/build-android.mjs --force
 
