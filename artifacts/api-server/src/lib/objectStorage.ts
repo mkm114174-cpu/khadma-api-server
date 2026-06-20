@@ -11,23 +11,45 @@ import {
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
+function isReplitRuntime(): boolean {
+  return Boolean(process.env.REPL_ID?.trim());
+}
+
+function createObjectStorageClient(): Storage {
+  const saJson = process.env.GCS_SERVICE_ACCOUNT_JSON?.trim();
+  if (saJson) {
+    const credentials = JSON.parse(saJson) as { project_id?: string };
+    return new Storage({
+      credentials,
+      projectId: credentials.project_id,
+    });
+  }
+
+  if (isReplitRuntime()) {
+    return new Storage({
+      credentials: {
+        audience: "replit",
+        subject_token_type: "access_token",
+        token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
+        type: "external_account",
+        credential_source: {
+          url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
+          format: {
+            type: "json",
+            subject_token_field_name: "access_token",
+          },
+        },
+        universe_domain: "googleapis.com",
       },
-    },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
-});
+      projectId: "",
+    });
+  }
+
+  // Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS file path).
+  return new Storage();
+}
+
+export const objectStorageClient = createObjectStorageClient();
 
 export class ObjectNotFoundError extends Error {
   constructor() {
@@ -256,6 +278,27 @@ async function signObjectURL({
   method: "GET" | "PUT" | "DELETE" | "HEAD";
   ttlSec: number;
 }): Promise<string> {
+  const useReplitSidecar =
+    isReplitRuntime() && !process.env.GCS_SERVICE_ACCOUNT_JSON?.trim();
+
+  if (!useReplitSidecar) {
+    const file = objectStorageClient.bucket(bucketName).file(objectName);
+    const action =
+      method === "PUT"
+        ? "write"
+        : method === "DELETE"
+          ? "delete"
+          : method === "HEAD"
+            ? "read"
+            : "read";
+    const [signedURL] = await file.getSignedUrl({
+      version: "v4",
+      action,
+      expires: Date.now() + ttlSec * 1000,
+    });
+    return signedURL;
+  }
+
   const request = {
     bucket_name: bucketName,
     object_name: objectName,
@@ -271,12 +314,12 @@ async function signObjectURL({
       },
       body: JSON.stringify(request),
       signal: AbortSignal.timeout(30_000),
-    }
+    },
   );
   if (!response.ok) {
     throw new Error(
       `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
+        `make sure you're running on Replit or set GCS_SERVICE_ACCOUNT_JSON`,
     );
   }
 

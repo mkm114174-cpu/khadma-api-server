@@ -13,4 +13,7 @@ pnpm install
 pnpm --filter @workspace/api-server run dev
 ```
 
-Set `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, and `CLERK_SECRET_KEY` in `artifacts/api-server/.env`.
+Set `DATABASE_URL` and `NEON_AUTH_BASE_URL` in Render (or `artifacts/api-server/.env` locally).
+
+Production API: `https://khadma-api-server.onrender.com`  
+Admin panel: `https://khadma-api-server.onrender.com/admin/`

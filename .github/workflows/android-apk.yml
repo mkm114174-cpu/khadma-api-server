@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       api_domain:
-        description: "API hostname (no https), e.g. your-app.pike.replit.dev"
+        description: "API hostname (no https), e.g. khadma-api-server.onrender.com"
         required: true
         type: string
       neon_auth_url:

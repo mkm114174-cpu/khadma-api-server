@@ -24,7 +24,7 @@ export function validateReleaseEnv(env = process.env) {
   if (!domain || domain === "localhost" || domain.startsWith("127.")) {
     errors.push(
       "EXPO_PUBLIC_DOMAIN must be your live API hostname (not localhost). " +
-        "Example: 8bc334a9-5b11-4cc9-b982-c6271448a5b3-00-2mh0dovbpifa3.pike.replit.dev",
+        "Example: khadma-api-server.onrender.com",
     );
   }
 

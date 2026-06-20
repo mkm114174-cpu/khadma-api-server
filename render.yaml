@@ -3,7 +3,7 @@ services:
     name: khadma-api
     runtime: node
     plan: free
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    buildCommand: bash scripts/render-build.sh
     startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
     healthCheckPath: /api/healthz
     envVars:
@@ -14,4 +14,11 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: NEON_AUTH_BASE_URL
+        sync: false
+      # Optional — GCS JSON for file uploads on Render (not Replit).
+      - key: GCS_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: PUBLIC_OBJECT_SEARCH_PATHS
+        sync: false
+      - key: PRIVATE_OBJECT_DIR
         sync: false
