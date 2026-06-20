@@ -1,5 +1,6 @@
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,15 +12,20 @@ import {
 
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { authClient } from "@/lib/neonAuth";
+import { useLang } from "@/context/LanguageContext";
+import type { AuthSessionPayload } from "@/lib/authSession";
+import { authClient, withAuthTimeout } from "@/lib/neonAuth";
 
 WebBrowser.maybeCompleteAuthSession();
 
 export function GoogleAuthButton({ label }: { label?: string }) {
   const C = useColors();
   const styles = React.useMemo(() => makeStyles(C), [C]);
-  const { refreshSession } = useAuth();
+  const { completeAuthLogin } = useAuth();
+  const { t } = useLang();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -32,38 +38,51 @@ export function GoogleAuthButton({ label }: { label?: string }) {
   const onPress = useCallback(async () => {
     try {
       setLoading(true);
-      const callbackURL = Linking.createURL("/");
-      const { error } = await authClient.signIn.social({
-        provider: "google",
-        callbackURL,
-      });
-      if (error) {
-        console.error("Google sign-in failed:", error);
+      setError(null);
+      const callbackURL = Linking.createURL("/(auth)/complete");
+      const { data, error: authError } = await withAuthTimeout(
+        authClient.signIn.social({
+          provider: "google",
+          callbackURL,
+        }),
+      );
+      if (authError) {
+        console.error("Google sign-in failed:", authError);
+        setError(t.auth.loginFailed);
         return;
       }
-      await refreshSession();
+      const ok = await completeAuthLogin(data as AuthSessionPayload);
+      if (!ok) {
+        setError(t.auth.finalizeFailed);
+        return;
+      }
+      router.replace("/(auth)/complete");
     } catch (err) {
       console.error("Google SSO failed:", err);
+      setError(t.auth.serverError);
     } finally {
       setLoading(false);
     }
-  }, [refreshSession]);
+  }, [completeAuthLogin, router, t.auth.finalizeFailed, t.auth.loginFailed, t.auth.serverError]);
 
   return (
-    <Pressable
-      style={[styles.btn, loading && styles.btnDisabled]}
-      onPress={onPress}
-      disabled={loading}
-    >
-      {loading ? (
-        <ActivityIndicator color={C.foreground} />
-      ) : (
-        <>
-          <Text style={styles.icon}>G</Text>
-          <Text style={styles.text}>{label ?? "المتابعة عبر Google"}</Text>
-        </>
-      )}
-    </Pressable>
+    <>
+      <Pressable
+        style={[styles.btn, loading && styles.btnDisabled]}
+        onPress={onPress}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color={C.foreground} />
+        ) : (
+          <>
+            <Text style={styles.icon}>G</Text>
+            <Text style={styles.text}>{label ?? t.auth.signInGoogle}</Text>
+          </>
+        )}
+      </Pressable>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </>
   );
 }
 
@@ -83,4 +102,10 @@ const makeStyles = (C: ReturnType<typeof useColors>) =>
     btnDisabled: { opacity: 0.5 },
     icon: { fontSize: 18, fontWeight: "700", color: C.foreground },
     text: { fontSize: 15, fontWeight: "600", color: C.foreground },
+    error: {
+      color: "#ff6b6b",
+      fontSize: 13,
+      textAlign: "center",
+      marginTop: 4,
+    },
   });

@@ -15,7 +15,13 @@ import {
   setAuthTokenGetter,
   type User,
 } from "@workspace/api-client-react";
-import { authClient, getAccessToken, hasActiveSession } from "@/lib/neonAuth";
+import {
+  finalizeAuthSession,
+  getAccessToken,
+  hasActiveSession,
+  signOutAuth,
+} from "@/lib/neonAuth";
+import type { AuthSessionPayload } from "@/lib/authSession";
 
 export type AppRole = "customer" | "provider" | "admin";
 
@@ -49,6 +55,7 @@ interface AuthContextValue {
   provision: (input: ProvisionInput) => Promise<void>;
   refresh: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  completeAuthLogin: (payload: AuthSessionPayload) => Promise<boolean>;
   logout: () => Promise<void>;
   setGuest: (guest: boolean) => void;
 }
@@ -152,12 +159,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(created);
   }, []);
 
+  const completeAuthLogin = useCallback(
+    async (payload: AuthSessionPayload) => {
+      const ok = await finalizeAuthSession(payload);
+      if (!ok) return false;
+      setIsSignedIn(true);
+      setSessionLoaded(true);
+      setResolved(false);
+      try {
+        await loadUser();
+      } catch (err) {
+        console.warn("[Auth] loadUser after login failed", err);
+      }
+      return true;
+    },
+    [loadUser],
+  );
+
   const logout = useCallback(async () => {
-    try {
-      await authClient.signOut();
-    } catch (err) {
-      console.warn("[Auth] signOut failed", err);
-    }
+    await signOutAuth();
     setIsSignedIn(false);
     setUser(null);
     setLoadError(false);
@@ -210,6 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provision,
       refresh,
       refreshSession,
+      completeAuthLogin,
       logout: async () => {
         await AsyncStorage.removeItem("khadma:demo");
         setIsGuest(false);
@@ -217,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       setGuest,
     }),
-    [status, user, isGuest, provision, refresh, refreshSession, logout, setGuest],
+    [status, user, isGuest, provision, refresh, refreshSession, completeAuthLogin, logout, setGuest],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,6 +3,15 @@ import { createAuthClient } from "better-auth/react";
 import { emailOTPClient, jwtClient } from "better-auth/client/plugins";
 import * as SecureStore from "expo-secure-store";
 
+import {
+  clearAuthSessionCache,
+  persistAuthJwt,
+  persistAuthSession,
+  readCachedJwt,
+  readCachedSession,
+  type AuthSessionPayload,
+} from "@/lib/authSession";
+
 const authUrl = process.env.EXPO_PUBLIC_NEON_AUTH_URL?.replace(/\/$/, "");
 
 if (!authUrl) {
@@ -11,9 +20,9 @@ if (!authUrl) {
   );
 }
 
-const SESSION_TIMEOUT_MS = 8_000;
+export const AUTH_TIMEOUT_MS = 15_000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export function withAuthTimeout<T>(promise: Promise<T>, ms = AUTH_TIMEOUT_MS): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`Auth request timed out after ${ms}ms`)),
@@ -35,6 +44,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * Neon Auth is Better Auth under the hood. The default @neondatabase/neon-js
  * client uses browser cookies/localStorage and crashes React Native on launch.
  * @better-auth/expo stores session cookies in SecureStore instead.
+ *
+ * React Native often cannot read Set-Cookie headers, so we also persist the
+ * session token from the JSON body after sign-in (email OTP, password, etc.).
  */
 export const authClient = createAuthClient({
   baseURL: authUrl ?? "https://placeholder.invalid/auth",
@@ -51,6 +63,14 @@ export const authClient = createAuthClient({
     throw: false,
     onSuccess: async (ctx) => {
       const jwt = ctx.response.headers.get("set-auth-jwt");
+      if (jwt) await persistAuthJwt(jwt);
+
+      const data = ctx.data as AuthSessionPayload | null;
+      if (data?.user && (data.session || data.token)) {
+        await persistAuthSession(data);
+        notifySessionChanged();
+      }
+
       if (jwt && ctx.data?.session) {
         ctx.data.session.token = jwt;
       }
@@ -58,22 +78,63 @@ export const authClient = createAuthClient({
   },
 });
 
-export async function getAccessToken(): Promise<string | null> {
+function notifySessionChanged() {
   try {
-    const { data } = await withTimeout(authClient.getSession(), SESSION_TIMEOUT_MS);
-    const token = data?.session?.token;
-    return typeof token === "string" && token.length > 0 ? token : null;
+    authClient.$store.notify("$sessionSignal");
   } catch {
-    return null;
+    // ignore if store not ready
   }
 }
 
-export async function hasActiveSession(): Promise<boolean> {
+/** Call after any successful sign-in / OTP verify so the app sees the session. */
+export async function finalizeAuthSession(
+  payload: AuthSessionPayload | null | undefined,
+): Promise<boolean> {
+  if (!payload?.user) return false;
+  const ok = await persistAuthSession(payload);
+  if (ok) notifySessionChanged();
+  return ok;
+}
+
+export async function getAccessToken(): Promise<string | null> {
+  const cachedJwt = readCachedJwt();
+  if (cachedJwt) return cachedJwt;
+
+  const cached = readCachedSession();
+  if (cached?.session.token) return cached.session.token;
+
   try {
-    const { data } = await withTimeout(authClient.getSession(), SESSION_TIMEOUT_MS);
-    return Boolean(data?.session && data?.user);
+    const { data } = await withAuthTimeout(authClient.getSession());
+    const token = data?.session?.token;
+    if (typeof token === "string" && token.length > 0) return token;
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+export async function hasActiveSession(): Promise<boolean> {
+  if (readCachedSession()) return true;
+
+  try {
+    const { data } = await withAuthTimeout(authClient.getSession());
+    if (data?.session && data?.user) {
+      await persistAuthSession(data as AuthSessionPayload);
+      return true;
+    }
   } catch (err) {
     console.warn("[neonAuth] getSession failed:", err);
-    return false;
+  }
+  return false;
+}
+
+export type { AuthSessionPayload } from "@/lib/authSession";
+
+export async function signOutAuth(): Promise<void> {
+  clearAuthSessionCache();
+  try {
+    await withAuthTimeout(authClient.signOut());
+  } catch {
+    // local cache already cleared
   }
 }

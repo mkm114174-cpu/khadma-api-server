@@ -88,11 +88,7 @@ export default function RoleScreen() {
 
   const goToSignUp = async (role: "customer" | "provider") => {
     await AsyncStorage.setItem("khadma:intendedRole", role);
-    if (role === "customer") {
-      router.push("/(auth)/email-code");
-    } else {
-      router.push({ pathname: "/(auth)/sign-up", params: { role } });
-    }
+    router.push("/(auth)/email-code");
   };
 
   return (

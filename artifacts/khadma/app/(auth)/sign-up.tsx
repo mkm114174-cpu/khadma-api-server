@@ -17,7 +17,8 @@ import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLang } from "@/context/LanguageContext";
-import { authClient } from "@/lib/neonAuth";
+import type { AuthSessionPayload } from "@/lib/authSession";
+import { authClient, withAuthTimeout } from "@/lib/neonAuth";
 
 export default function SignUpScreen() {
   const C = useColors();
@@ -25,7 +26,7 @@ export default function SignUpScreen() {
   const insets = useSafeAreaInsets();
   const { t, isRTL } = useLang();
   const { role } = useLocalSearchParams<{ role?: string }>();
-  const { refreshSession } = useAuth();
+  const { completeAuthLogin } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,11 +41,13 @@ export default function SignUpScreen() {
     setFormError("");
     setBusy(true);
     try {
-      const { data, error } = await authClient.signUp.email({
-        email,
-        password,
-        name: email.split("@")[0] ?? "User",
-      });
+      const { data, error } = await withAuthTimeout(
+        authClient.signUp.email({
+          email,
+          password,
+          name: email.split("@")[0] ?? "User",
+        }),
+      );
       if (error) {
         console.error("Sign-up error:", error);
         setFormError(t.auth.signupFailed);
@@ -54,7 +57,9 @@ export default function SignUpScreen() {
         setNeedsVerify(true);
         return;
       }
-      await refreshSession();
+      if (data?.user) {
+        await completeAuthLogin(data as AuthSessionPayload);
+      }
     } catch (err) {
       console.error("Sign-up exception:", err);
       setFormError(t.auth.signupFailed);
@@ -67,16 +72,25 @@ export default function SignUpScreen() {
     setFormError("");
     setBusy(true);
     try {
-      const { error } = await authClient.emailOtp.verifyEmail({
-        email,
-        otp: code,
-      });
+      const { data, error } = await withAuthTimeout(
+        authClient.emailOtp.verifyEmail({
+          email,
+          otp: code,
+        }),
+      );
       if (error) {
         console.error("Verify error:", error);
         setFormError(t.auth.verifyFailed);
         return;
       }
-      await refreshSession();
+      const { data: signInData, error: signInError } = await withAuthTimeout(
+        authClient.signIn.email({ email, password }),
+      );
+      if (signInError) {
+        setFormError(t.auth.loginFailed);
+        return;
+      }
+      await completeAuthLogin(signInData as AuthSessionPayload);
     } catch (err) {
       console.error("Verify exception:", err);
       setFormError(t.auth.verifyFailed);
