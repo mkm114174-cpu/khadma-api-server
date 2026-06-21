@@ -10,8 +10,12 @@ const ADMIN_MOUNT = "/admin";
 export function resolveAdminStaticDir(): string | null {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
+    // Bundled output: dist/index.mjs → dist/admin-static (Render build copies here)
+    path.resolve(here, "admin-static"),
+    // Legacy / misconfigured deploy layout
     path.resolve(here, "../admin-static"),
-    path.resolve(here, "../../../admin/dist/public"),
+    // Local dev when running from source (src/lib → admin/dist/public)
+    path.resolve(here, "../../admin/dist/public"),
   ];
   for (const dir of candidates) {
     if (fs.existsSync(path.join(dir, "index.html"))) {

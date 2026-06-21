@@ -55,6 +55,16 @@ export default function SignUpScreen() {
       }
       if (data?.user && data.user.emailVerified === false) {
         setNeedsVerify(true);
+        const { error: otpError } = await withAuthTimeout(
+          authClient.emailOtp.sendVerificationOtp({
+            email,
+            type: "email-verification",
+          }),
+        );
+        if (otpError) {
+          console.error("Send verification OTP failed:", otpError);
+          setFormError(t.auth.serverError);
+        }
         return;
       }
       if (data?.user) {

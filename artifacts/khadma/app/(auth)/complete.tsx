@@ -57,7 +57,7 @@ export default function CompleteProfileScreen() {
     try {
       setSubmitting(true);
       setError(null);
-      await provision({ name: name.trim(), role: "customer", email, language: lang });
+      await provision({ name: name.trim(), role, email, language: lang });
       await AsyncStorage.removeItem("khadma:intendedRole");
       // AuthGate redirects automatically once the profile is created.
     } catch (err) {
@@ -105,26 +105,30 @@ export default function CompleteProfileScreen() {
 
           <View style={styles.roleRow}>
             <Pressable
-              style={[styles.roleOption, styles.roleActive]}
+              style={[styles.roleOption, role === "customer" && styles.roleActive]}
               onPress={() => {
                 setRole("customer");
+                void AsyncStorage.setItem("khadma:intendedRole", "customer");
                 setError(null);
               }}
             >
               <Text style={styles.roleIcon}>👤</Text>
-              <Text style={[styles.roleLabel, styles.roleLabelActive]}>
+              <Text style={[styles.roleLabel, role === "customer" && styles.roleLabelActive]}>
                 {t.auth.customer}
               </Text>
             </Pressable>
             <Pressable
-              style={styles.roleOption}
+              style={[styles.roleOption, role === "provider" && styles.roleActive]}
               onPress={() => {
                 setRole("provider");
+                void AsyncStorage.setItem("khadma:intendedRole", "provider");
                 setError(null);
               }}
             >
               <Text style={styles.roleIcon}>🔧</Text>
-              <Text style={styles.roleLabel}>{t.auth.provider}</Text>
+              <Text style={[styles.roleLabel, role === "provider" && styles.roleLabelActive]}>
+                {t.auth.provider}
+              </Text>
             </Pressable>
           </View>
 

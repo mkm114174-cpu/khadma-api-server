@@ -90,10 +90,28 @@ function notifySessionChanged() {
 export async function finalizeAuthSession(
   payload: AuthSessionPayload | null | undefined,
 ): Promise<boolean> {
-  if (!payload?.user) return false;
-  const ok = await persistAuthSession(payload);
-  if (ok) notifySessionChanged();
-  return ok;
+  if (payload?.user) {
+    const ok = await persistAuthSession(payload);
+    if (ok) {
+      notifySessionChanged();
+      return true;
+    }
+  }
+
+  // OAuth and some flows store the cookie via onSuccess but omit user in the body.
+  try {
+    const { data } = await withAuthTimeout(authClient.getSession());
+    if (data?.session && data?.user) {
+      const ok = await persistAuthSession(data as AuthSessionPayload);
+      if (ok) {
+        notifySessionChanged();
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn("[neonAuth] finalizeAuthSession getSession fallback failed:", err);
+  }
+  return false;
 }
 
 export async function getAccessToken(): Promise<string | null> {

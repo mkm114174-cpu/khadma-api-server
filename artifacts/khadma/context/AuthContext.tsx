@@ -20,6 +20,7 @@ import {
   getAccessToken,
   hasActiveSession,
   signOutAuth,
+  withAuthTimeout,
 } from "@/lib/neonAuth";
 import type { AuthSessionPayload } from "@/lib/authSession";
 
@@ -64,6 +65,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 /** Never block the UI longer than this while checking auth on launch. */
 const BOOT_TIMEOUT_MS = 6_000;
+const LOAD_USER_TIMEOUT_MS = 10_000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -119,12 +121,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUser = useCallback(async () => {
     try {
-      const current = await getCurrentUser();
+      const current = await withAuthTimeout(getCurrentUser(), LOAD_USER_TIMEOUT_MS);
       setUser(current);
       setLoadError(false);
     } catch (err) {
       setUser(null);
       if (err instanceof ApiError && err.status === 404) {
+        setLoadError(false);
+      } else if (
+        err instanceof ApiError &&
+        (err.status === 401 || err.status === 403)
+      ) {
+        console.warn("[Auth] session rejected by API — signing out");
+        await signOutAuth();
+        setIsSignedIn(false);
         setLoadError(false);
       } else {
         console.error("Failed to load current user", err);
@@ -161,7 +171,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const completeAuthLogin = useCallback(
     async (payload: AuthSessionPayload) => {
-      const ok = await finalizeAuthSession(payload);
+      let ok = await finalizeAuthSession(payload);
+      if (!ok) {
+        ok = await hasActiveSession();
+      }
       if (!ok) return false;
       setIsSignedIn(true);
       setSessionLoaded(true);

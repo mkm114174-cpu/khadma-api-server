@@ -17,14 +17,15 @@ import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLang } from "@/context/LanguageContext";
-import { authClient } from "@/lib/neonAuth";
+import type { AuthSessionPayload } from "@/lib/authSession";
+import { authClient, withAuthTimeout } from "@/lib/neonAuth";
 
 export default function SignInScreen() {
   const C = useColors();
   const styles = React.useMemo(() => makeStyles(C), [C]);
   const insets = useSafeAreaInsets();
   const { t, isRTL } = useLang();
-  const { refreshSession } = useAuth();
+  const { refreshSession, completeAuthLogin } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,13 +36,20 @@ export default function SignInScreen() {
     setFormError("");
     setBusy(true);
     try {
-      const { error } = await authClient.signIn.email({ email, password });
+      const { data, error } = await withAuthTimeout(
+        authClient.signIn.email({ email, password }),
+      );
       if (error) {
         console.error("Sign-in error:", error);
         setFormError(t.auth.loginFailed);
         return;
       }
-      await refreshSession();
+      const ok = await completeAuthLogin(data as AuthSessionPayload);
+      if (!ok) {
+        await refreshSession();
+        setFormError(t.auth.loginFailed);
+        return;
+      }
     } catch (err) {
       console.error("Sign-in failed:", err);
       setFormError(t.auth.loginFailed);

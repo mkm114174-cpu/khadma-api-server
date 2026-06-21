@@ -39,10 +39,23 @@ type Phase = "email" | "code" | "language" | "welcome";
 type Mode = "signIn" | "signUp";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SIGNUP_PWD_KEY = "khadma:signUpPassword";
 
 function errorMessage(error: unknown): string | undefined {
   const e = error as { message?: string } | null;
   return e?.message;
+}
+
+function isUserNotFoundError(error: unknown): boolean {
+  const e = error as { message?: string; code?: string; status?: number } | null;
+  if (e?.status === 404) return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return (
+    msg.includes("not found") ||
+    msg.includes("does not exist") ||
+    msg.includes("no user") ||
+    e?.code === "USER_NOT_FOUND"
+  );
 }
 
 export default function EmailCodeScreen() {
@@ -70,6 +83,9 @@ export default function EmailCodeScreen() {
         setIntendedRole(stored);
       }
     });
+    AsyncStorage.getItem(SIGNUP_PWD_KEY).then((stored) => {
+      if (stored) setSignUpPassword(stored);
+    });
   }, []);
 
   const emailValid = EMAIL_RE.test(email.trim());
@@ -91,13 +107,20 @@ export default function EmailCodeScreen() {
 
       if (!signInError) {
         setSignUpPassword(null);
+        await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
         setMode("signIn");
         setPhase("code");
         return;
       }
 
+      if (!isUserNotFoundError(signInError)) {
+        setError(errorMessage(signInError) ?? t.auth.serverError);
+        return;
+      }
+
       const tempPassword = Crypto.randomUUID();
       setSignUpPassword(tempPassword);
+      await AsyncStorage.setItem(SIGNUP_PWD_KEY, tempPassword);
       const { error: signUpError } = await withAuthTimeout(
         authClient.signUp.email({
           email: addr,
@@ -107,6 +130,7 @@ export default function EmailCodeScreen() {
       );
       if (signUpError) {
         setSignUpPassword(null);
+        await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
         setError(errorMessage(signUpError) ?? t.auth.signupFailed);
         return;
       }
@@ -157,6 +181,7 @@ export default function EmailCodeScreen() {
       setError(t.auth.finalizeFailed);
       return false;
     }
+    await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
     const lang = await AsyncStorage.getItem("khadma.lang");
     if (lang === "ar" || lang === "en" || lang === "he") {
       setPhase("welcome");
@@ -202,7 +227,10 @@ export default function EmailCodeScreen() {
       const { data, error: signInError } = await withAuthTimeout(
         authClient.signIn.email({
           email: addr,
-          password: signUpPassword ?? "",
+          password:
+            signUpPassword ??
+            (await AsyncStorage.getItem(SIGNUP_PWD_KEY)) ??
+            "",
         }),
       );
       if (signInError) {

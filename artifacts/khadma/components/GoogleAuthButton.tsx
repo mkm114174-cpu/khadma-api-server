@@ -51,7 +51,10 @@ export function GoogleAuthButton({ label }: { label?: string }) {
         setError(t.auth.loginFailed);
         return;
       }
-      const ok = await completeAuthLogin(data as AuthSessionPayload);
+      let ok = await completeAuthLogin(data as AuthSessionPayload);
+      if (!ok) {
+        ok = await completeAuthLogin({});
+      }
       if (!ok) {
         setError(t.auth.finalizeFailed);
         return;

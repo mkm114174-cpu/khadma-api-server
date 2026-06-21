@@ -22,6 +22,10 @@ app.listen(port, "0.0.0.0", async (err) => {
     logger.info("Skills seeded (if not already present)");
   } catch (err) {
     logger.error({ err }, "Failed to seed skills");
+    if (process.env.NODE_ENV === "production") {
+      logger.error("Exiting — skills seed is required in production");
+      process.exit(1);
+    }
   }
 
   startReassignSweep();

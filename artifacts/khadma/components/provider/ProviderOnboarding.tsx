@@ -24,7 +24,6 @@ import { authClient } from "@/lib/neonAuth";
 import {
   ApiError,
   getGetMyProviderQueryKey,
-  provisionUser,
   useCreateProvider,
   useUpdateProvider,
   useListSkills,
@@ -78,7 +77,7 @@ export default function ProviderOnboarding({
   const styles = React.useMemo(() => makeStyles(C), [C]);
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { name, phone: authPhone, logout, status, refresh } = useAuth();
+  const { name, phone: authPhone, logout, status, refresh, provision } = useAuth();
   const { t, lang, isRTL } = useLang();
   const topInset = Platform.OS === "web" ? 40 : insets.top;
   const align = isRTL ? "right" : "left";
@@ -355,7 +354,7 @@ export default function ProviderOnboarding({
       // Merged flow: provision the local user record first (idempotent on the
       // server) so the provider profile can be attached to it.
       if (needsProvision) {
-        await provisionUser({
+        await provision({
           name: regName.trim(),
           role: "provider",
           email: sessionEmail,
