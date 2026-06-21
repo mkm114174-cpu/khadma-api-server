@@ -14,6 +14,7 @@ fi
 
 echo "==> Sync database schema"
 pnpm --filter @workspace/db run push-force
+node scripts/verify-db-schema.mjs
 
 echo "==> Build admin panel"
 if [ -z "${NEON_AUTH_BASE_URL:-}" ]; then

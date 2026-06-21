@@ -1,0 +1,40 @@
+name: Production smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "artifacts/api-server/**"
+      - "artifacts/admin/**"
+      - "lib/db/**"
+      - "scripts/render-*.sh"
+      - "scripts/verify-db-schema.mjs"
+      - "scripts/smoke-test-production.mjs"
+      - "render.yaml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Wait for Render deploy
+        run: sleep 150
+
+      - name: Run production smoke checks (retry until 4/4)
+        run: |
+          for i in $(seq 1 12); do
+            echo "=== Attempt $i ==="
+            if node scripts/smoke-test-production.mjs; then
+              echo "All 4 smoke checks passed."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "Smoke test failed after 12 attempts (~9 min)"
+          exit 1

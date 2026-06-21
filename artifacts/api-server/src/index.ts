@@ -1,4 +1,5 @@
 import app from "./app";
+import { verifyCoreTables } from "./lib/ensureDatabase";
 import { logger } from "./lib/logger";
 import { startReassignSweep } from "./lib/reassign";
 
@@ -17,12 +18,16 @@ app.listen(port, "0.0.0.0", async (err) => {
   logger.info({ port }, "Server listening on 0.0.0.0");
 
   try {
+    await verifyCoreTables();
+  } catch (err) {
+    logger.error({ err }, "Database schema verification failed");
+  }
+
+  try {
     const { seedSkills } = await import("@workspace/db/seed/skills");
     await seedSkills();
     logger.info("Skills seeded (if not already present)");
   } catch (err) {
-    // Do not crash the process — auth and provisioning must stay up even if
-    // skills seed fails (e.g. schema not yet synced). /api/healthz reports DB state.
     logger.error({ err }, "Failed to seed skills (server will continue)");
   }
 

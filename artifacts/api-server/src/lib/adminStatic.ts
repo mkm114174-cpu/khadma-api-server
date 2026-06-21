@@ -9,11 +9,15 @@ const ADMIN_MOUNT = "/admin";
 /** Resolve built admin SPA directory (Render copies to dist/admin-static). */
 export function resolveAdminStaticDir(): string | null {
   const here = path.dirname(fileURLToPath(import.meta.url));
+  const cwd = process.cwd();
   const candidates = [
     // Bundled output: dist/index.mjs → dist/admin-static (Render build copies here)
     path.resolve(here, "admin-static"),
     // Legacy / misconfigured deploy layout
     path.resolve(here, "../admin-static"),
+    // Monorepo root cwd (Render start/build)
+    path.resolve(cwd, "artifacts/api-server/dist/admin-static"),
+    path.resolve(cwd, "artifacts/admin/dist/public"),
     // Local dev when running from source (src/lib → admin/dist/public)
     path.resolve(here, "../../admin/dist/public"),
   ];
