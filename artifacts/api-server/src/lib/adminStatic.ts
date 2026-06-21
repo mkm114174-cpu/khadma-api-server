@@ -6,19 +6,27 @@ import { logger } from "./logger";
 
 const ADMIN_MOUNT = "/admin";
 
+function findMonorepoRoot(): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+
 /** Resolve built admin SPA directory (Render copies to dist/admin-static). */
 export function resolveAdminStaticDir(): string | null {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const cwd = process.cwd();
+  const root = findMonorepoRoot();
   const candidates = [
-    // Bundled output: dist/index.mjs → dist/admin-static (Render build copies here)
+    // Bundled output: dist/index.mjs → dist/admin-static
     path.resolve(here, "admin-static"),
-    // Legacy / misconfigured deploy layout
     path.resolve(here, "../admin-static"),
-    // Monorepo root cwd (Render start/build)
-    path.resolve(cwd, "artifacts/api-server/dist/admin-static"),
-    path.resolve(cwd, "artifacts/admin/dist/public"),
-    // Local dev when running from source (src/lib → admin/dist/public)
+    path.resolve(root, "artifacts/api-server/dist/admin-static"),
+    path.resolve(root, "artifacts/admin/dist/public"),
     path.resolve(here, "../../admin/dist/public"),
   ];
   for (const dir of candidates) {

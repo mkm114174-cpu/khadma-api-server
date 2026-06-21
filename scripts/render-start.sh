@@ -21,14 +21,13 @@ echo "==> Startup: verify core tables"
 node scripts/verify-db-schema.mjs
 
 if [ ! -f artifacts/api-server/dist/admin-static/index.html ] && [ -n "${NEON_AUTH_BASE_URL:-}" ]; then
-  echo "WARN: admin-static missing at startup — rebuilding admin bundle"
+  echo "WARN: admin-static missing at startup — rebuilding admin"
   PORT=8080 \
     BASE_PATH=/admin/ \
     VITE_NEON_AUTH_URL="$NEON_AUTH_BASE_URL" \
     NODE_ENV=production \
     pnpm --filter @workspace/admin run build
-  mkdir -p artifacts/api-server/dist/admin-static
-  cp -r artifacts/admin/dist/public/. artifacts/api-server/dist/admin-static/
+  node artifacts/api-server/scripts/copy-admin-static.mjs
 fi
 
 if [ ! -f artifacts/api-server/dist/index.mjs ]; then

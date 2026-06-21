@@ -27,12 +27,8 @@ PORT=8080 \
   NODE_ENV=production \
   pnpm --filter @workspace/admin run build
 
-echo "==> Build API server"
+echo "==> Build API server (includes admin-static copy)"
 pnpm --filter @workspace/api-server run build
-
-echo "==> Bundle admin static files into API dist"
-rm -rf artifacts/api-server/dist/admin-static
-cp -r artifacts/admin/dist/public artifacts/api-server/dist/admin-static
 
 if [ ! -f artifacts/api-server/dist/admin-static/index.html ]; then
   echo "ERROR: admin static bundle missing at artifacts/api-server/dist/admin-static/index.html" >&2
