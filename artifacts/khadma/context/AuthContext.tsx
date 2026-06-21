@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -23,6 +24,7 @@ import {
   withAuthTimeout,
 } from "@/lib/neonAuth";
 import type { AuthSessionPayload } from "@/lib/authSession";
+import { hydrateAuthSessionCache } from "@/lib/authSession";
 
 export type AppRole = "customer" | "provider" | "admin";
 
@@ -66,6 +68,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 /** Never block the UI longer than this while checking auth on launch. */
 const BOOT_TIMEOUT_MS = 6_000;
 const LOAD_USER_TIMEOUT_MS = 10_000;
+/** After OTP/OAuth login, don't sign out on transient API 401 (cold start, provisioning). */
+const POST_LOGIN_GRACE_MS = 60_000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -75,6 +79,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [guestResolved, setGuestResolved] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
+  const loginGraceUntilRef = useRef(0);
+
+  const isInLoginGrace = useCallback(
+    () => Date.now() < loginGraceUntilRef.current,
+    [],
+  );
+
+  useEffect(() => {
+    void hydrateAuthSessionCache();
+  }, []);
 
   useEffect(() => {
     setAuthTokenGetter(() => getAccessToken());
@@ -132,10 +146,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         err instanceof ApiError &&
         (err.status === 401 || err.status === 403)
       ) {
-        console.warn("[Auth] session rejected by API — signing out");
-        await signOutAuth();
-        setIsSignedIn(false);
-        setLoadError(false);
+        if (isInLoginGrace()) {
+          console.warn("[Auth] API rejected token during post-login grace — keeping session");
+          setLoadError(false);
+        } else {
+          console.warn("[Auth] session rejected by API — signing out");
+          await signOutAuth();
+          setIsSignedIn(false);
+          setLoadError(false);
+        }
       } else {
         console.error("Failed to load current user", err);
         setLoadError(true);
@@ -143,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setResolved(true);
     }
-  }, []);
+  }, [isInLoginGrace]);
 
   useEffect(() => {
     if (!sessionLoaded) return;
@@ -174,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const ok = await finalizeAuthSession(payload);
       if (!ok) return false;
 
+      loginGraceUntilRef.current = Date.now() + POST_LOGIN_GRACE_MS;
       setIsSignedIn(true);
       setSessionLoaded(true);
       setResolved(false);
@@ -194,11 +214,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             err instanceof ApiError &&
             (err.status === 401 || err.status === 403)
           ) {
-            console.warn("[Auth] API rejected token after login");
-            void signOutAuth().then(() => {
-              setIsSignedIn(false);
-              setLoadError(false);
-            });
+            console.warn(
+              "[Auth] API rejected token after login — keeping session for provisioning",
+            );
+            setLoadError(false);
             return;
           }
           console.error("Failed to load current user after login", err);

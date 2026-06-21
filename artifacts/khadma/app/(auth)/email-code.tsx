@@ -24,7 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLang } from "@/context/LanguageContext";
 import type { AuthSessionPayload } from "@/lib/authSession";
-import { authClient, hasActiveSession, withAuthTimeout } from "@/lib/neonAuth";
+import { authClient, withAuthTimeout } from "@/lib/neonAuth";
 
 const { width } = Dimensions.get("window");
 const STATIC_LANGUAGES = [
@@ -64,7 +64,7 @@ export default function EmailCodeScreen() {
   const insets = useSafeAreaInsets();
   const { t, isRTL, setLang } = useLang();
   const router = useRouter();
-  const { completeAuthLogin, refreshSession } = useAuth();
+  const { completeAuthLogin } = useAuth();
 
   const [phase, setPhase] = useState<Phase>("email");
   const [mode, setMode] = useState<Mode>("signIn");
@@ -256,22 +256,10 @@ export default function EmailCodeScreen() {
     }
   };
 
-  const enterApp = useCallback(async () => {
-    try {
-      const active = await hasActiveSession();
-      if (!active) {
-        setError(t.auth.finalizeFailed);
-        setPhase("code");
-        return;
-      }
-      await refreshSession();
-      router.replace("/(auth)/complete");
-    } catch (err) {
-      console.error("[enterApp] failed:", err);
-      setError(t.auth.finalizeFailed);
-      setPhase("code");
-    }
-  }, [refreshSession, router, t.auth.finalizeFailed]);
+  const enterApp = useCallback(() => {
+    // Login already succeeded before welcome splash — go straight to profile setup.
+    router.replace("/(auth)/complete");
+  }, [router]);
 
   if (phase === "language") {
     return (

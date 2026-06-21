@@ -6,6 +6,14 @@ export const COOKIE_STORE_KEY = `${STORAGE_PREFIX}_cookie`;
 export const SESSION_CACHE_KEY = `${STORAGE_PREFIX}_session_data`;
 export const JWT_STORE_KEY = `${STORAGE_PREFIX}_jwt`;
 
+type CachedSession = {
+  user: AuthUser;
+  session: { token: string; [key: string]: unknown };
+};
+
+let memorySession: CachedSession | null = null;
+let memoryJwt: string | null = null;
+
 export type AuthUser = {
   id: string;
   email?: string | null;
@@ -49,12 +57,15 @@ export async function persistAuthSession(
     },
   };
 
+  memorySession = sessionBody;
   await SecureStore.setItemAsync(SESSION_CACHE_KEY, JSON.stringify(sessionBody));
   return true;
 }
 
 export async function persistAuthJwt(jwt: string): Promise<void> {
-  if (jwt) await SecureStore.setItemAsync(JWT_STORE_KEY, jwt);
+  if (!jwt) return;
+  memoryJwt = jwt;
+  await SecureStore.setItemAsync(JWT_STORE_KEY, jwt);
 }
 
 /** Merge Set-Cookie into the expo cookie jar (signed values from the server). */
@@ -85,34 +96,56 @@ export async function mergeAuthCookiesFromHeader(
   await SecureStore.setItemAsync(COOKIE_STORE_KEY, JSON.stringify(merged));
 }
 
-export function readCachedSession(): {
-  user: AuthUser;
-  session: { token: string; [key: string]: unknown };
-} | null {
+function parseCachedSession(raw: string | null): CachedSession | null {
+  if (!raw || raw === "{}") return null;
+  const parsed = JSON.parse(raw) as AuthSessionPayload;
+  const token = sessionToken(parsed);
+  if (!token || !parsed.user) return null;
+  return {
+    user: parsed.user,
+    session: {
+      ...(parsed.session && typeof parsed.session === "object"
+        ? parsed.session
+        : {}),
+      token,
+    },
+  };
+}
+
+/** Load SecureStore into memory on cold start (async API only at boot). */
+export async function hydrateAuthSessionCache(): Promise<void> {
+  try {
+    const raw = await SecureStore.getItemAsync(SESSION_CACHE_KEY);
+    memorySession = parseCachedSession(raw);
+  } catch {
+    memorySession = null;
+  }
+  try {
+    const jwt = await SecureStore.getItemAsync(JWT_STORE_KEY);
+    memoryJwt = jwt && jwt.length > 0 ? jwt : null;
+  } catch {
+    memoryJwt = null;
+  }
+}
+
+export function readCachedSession(): CachedSession | null {
+  if (memorySession) return memorySession;
   try {
     const raw = SecureStore.getItem(SESSION_CACHE_KEY);
-    if (!raw || raw === "{}") return null;
-    const parsed = JSON.parse(raw) as AuthSessionPayload;
-    const token = sessionToken(parsed);
-    if (!token || !parsed.user) return null;
-    return {
-      user: parsed.user,
-      session: {
-        ...(parsed.session && typeof parsed.session === "object"
-          ? parsed.session
-          : {}),
-        token,
-      },
-    };
+    const parsed = parseCachedSession(raw);
+    if (parsed) memorySession = parsed;
+    return parsed;
   } catch {
     return null;
   }
 }
 
 export function readCachedJwt(): string | null {
+  if (memoryJwt) return memoryJwt;
   try {
     const jwt = SecureStore.getItem(JWT_STORE_KEY);
-    return jwt && jwt.length > 0 ? jwt : null;
+    memoryJwt = jwt && jwt.length > 0 ? jwt : null;
+    return memoryJwt;
   } catch {
     return null;
   }
@@ -135,6 +168,8 @@ export function isJwtValid(jwt: string | null): boolean {
 }
 
 export async function clearAuthSessionCache(): Promise<void> {
+  memorySession = null;
+  memoryJwt = null;
   await Promise.all([
     SecureStore.deleteItemAsync(COOKIE_STORE_KEY).catch(() => {}),
     SecureStore.deleteItemAsync(SESSION_CACHE_KEY).catch(() => {}),
