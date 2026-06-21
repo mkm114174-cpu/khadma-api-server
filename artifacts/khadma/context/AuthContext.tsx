@@ -171,22 +171,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const completeAuthLogin = useCallback(
     async (payload: AuthSessionPayload) => {
-      let ok = await finalizeAuthSession(payload);
-      if (!ok) {
-        ok = await hasActiveSession();
-      }
+      const ok = await finalizeAuthSession(payload);
       if (!ok) return false;
+
       setIsSignedIn(true);
       setSessionLoaded(true);
       setResolved(false);
+
       try {
-        await loadUser();
+        const current = await withAuthTimeout(getCurrentUser(), LOAD_USER_TIMEOUT_MS);
+        setUser(current);
+        setLoadError(false);
+        return true;
       } catch (err) {
-        console.warn("[Auth] loadUser after login failed", err);
+        setUser(null);
+        if (err instanceof ApiError && err.status === 404) {
+          setLoadError(false);
+          return true;
+        }
+        if (
+          err instanceof ApiError &&
+          (err.status === 401 || err.status === 403)
+        ) {
+          console.warn("[Auth] API rejected JWT after login — signing out");
+          await signOutAuth();
+          setIsSignedIn(false);
+          setLoadError(false);
+          return false;
+        }
+        console.error("Failed to load current user after login", err);
+        setLoadError(true);
+        return false;
+      } finally {
+        setResolved(true);
       }
-      return true;
     },
-    [loadUser],
+    [],
   );
 
   const logout = useCallback(async () => {

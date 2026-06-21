@@ -24,7 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLang } from "@/context/LanguageContext";
 import type { AuthSessionPayload } from "@/lib/authSession";
-import { authClient, withAuthTimeout } from "@/lib/neonAuth";
+import { authClient, hasActiveSession, withAuthTimeout } from "@/lib/neonAuth";
 
 const { width } = Dimensions.get("window");
 const STATIC_LANGUAGES = [
@@ -248,6 +248,12 @@ export default function EmailCodeScreen() {
 
   const enterApp = useCallback(async () => {
     try {
+      const active = await hasActiveSession();
+      if (!active) {
+        setError(t.auth.finalizeFailed);
+        setPhase("code");
+        return;
+      }
       await refreshSession();
       router.replace("/(auth)/complete");
     } catch (err) {

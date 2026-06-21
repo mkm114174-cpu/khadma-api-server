@@ -30,8 +30,9 @@ export async function verifyNeonAuthToken(
 export function getBearerToken(
   authorizationHeader: string | undefined,
 ): string | null {
-  if (!authorizationHeader?.startsWith("Bearer ")) return null;
-  const token = authorizationHeader.slice("Bearer ".length).trim();
+  if (!authorizationHeader) return null;
+  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1]?.trim();
   return token || null;
 }
 

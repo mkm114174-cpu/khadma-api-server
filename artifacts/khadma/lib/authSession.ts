@@ -1,10 +1,10 @@
 import * as SecureStore from "expo-secure-store";
+import { parseSetCookieHeader } from "better-auth/cookies";
 
 const STORAGE_PREFIX = "khadma";
 export const COOKIE_STORE_KEY = `${STORAGE_PREFIX}_cookie`;
 export const SESSION_CACHE_KEY = `${STORAGE_PREFIX}_session_data`;
 export const JWT_STORE_KEY = `${STORAGE_PREFIX}_jwt`;
-const COOKIE_PREFIX = "better-auth";
 
 export type AuthUser = {
   id: string;
@@ -28,17 +28,16 @@ function sessionToken(payload: AuthSessionPayload | null | undefined): string | 
   return null;
 }
 
-/** Persist Better Auth session for @better-auth/expo (SecureStore cookie jar). */
+/**
+ * Cache user + opaque session token locally for UI/session checks.
+ * Does NOT write the cookie jar — @better-auth/expo owns signed cookies.
+ */
 export async function persistAuthSession(
   payload: AuthSessionPayload,
 ): Promise<boolean> {
   const token = sessionToken(payload);
   const user = payload.user;
   if (!token || !user) return false;
-
-  const cookieJson = JSON.stringify({
-    [`${COOKIE_PREFIX}.session_token`]: { value: token, expires: null },
-  });
 
   const sessionBody = {
     user,
@@ -50,13 +49,40 @@ export async function persistAuthSession(
     },
   };
 
-  SecureStore.setItem(COOKIE_STORE_KEY, cookieJson);
-  SecureStore.setItem(SESSION_CACHE_KEY, JSON.stringify(sessionBody));
+  await SecureStore.setItemAsync(SESSION_CACHE_KEY, JSON.stringify(sessionBody));
   return true;
 }
 
 export async function persistAuthJwt(jwt: string): Promise<void> {
-  if (jwt) SecureStore.setItem(JWT_STORE_KEY, jwt);
+  if (jwt) await SecureStore.setItemAsync(JWT_STORE_KEY, jwt);
+}
+
+/** Merge Set-Cookie into the expo cookie jar (signed values from the server). */
+export async function mergeAuthCookiesFromHeader(
+  setCookieHeader: string,
+): Promise<void> {
+  const parsed = parseSetCookieHeader(setCookieHeader);
+  let merged: Record<string, { value: string; expires: string | null }> = {};
+
+  try {
+    const prev = await SecureStore.getItemAsync(COOKIE_STORE_KEY);
+    if (prev) merged = JSON.parse(prev) as typeof merged;
+  } catch {
+    // start fresh
+  }
+
+  parsed.forEach((cookie, key) => {
+    const expiresAt = cookie.expires;
+    const maxAge = cookie["max-age"];
+    const expires = maxAge
+      ? new Date(Date.now() + Number(maxAge) * 1000).toISOString()
+      : expiresAt
+        ? new Date(String(expiresAt)).toISOString()
+        : null;
+    merged[key] = { value: cookie.value, expires };
+  });
+
+  await SecureStore.setItemAsync(COOKIE_STORE_KEY, JSON.stringify(merged));
 }
 
 export function readCachedSession(): {
@@ -65,7 +91,7 @@ export function readCachedSession(): {
 } | null {
   try {
     const raw = SecureStore.getItem(SESSION_CACHE_KEY);
-    if (!raw) return null;
+    if (!raw || raw === "{}") return null;
     const parsed = JSON.parse(raw) as AuthSessionPayload;
     const token = sessionToken(parsed);
     if (!token || !parsed.user) return null;
@@ -92,12 +118,26 @@ export function readCachedJwt(): string | null {
   }
 }
 
-export function clearAuthSessionCache(): void {
+/** True if JWT exists and is not expired (60s buffer). */
+export function isJwtValid(jwt: string | null): boolean {
+  if (!jwt) return false;
   try {
-    SecureStore.setItem(COOKIE_STORE_KEY, "{}");
-    SecureStore.setItem(SESSION_CACHE_KEY, "{}");
-    SecureStore.deleteItemAsync(JWT_STORE_KEY).catch(() => {});
+    const parts = jwt.split(".");
+    if (parts.length < 2) return false;
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { exp?: number };
+    if (!payload.exp) return true;
+    return payload.exp * 1000 > Date.now() + 60_000;
   } catch {
-    // ignore
+    return false;
   }
+}
+
+export async function clearAuthSessionCache(): Promise<void> {
+  await Promise.all([
+    SecureStore.deleteItemAsync(COOKIE_STORE_KEY).catch(() => {}),
+    SecureStore.deleteItemAsync(SESSION_CACHE_KEY).catch(() => {}),
+    SecureStore.deleteItemAsync(JWT_STORE_KEY).catch(() => {}),
+  ]);
 }

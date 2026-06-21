@@ -81,6 +81,8 @@ function AuthGate() {
     }
 
     if (status === "needsProvision") {
+      // Let email-code finish welcome splash before redirecting to complete.
+      if (segments[1] === "email-code") return;
       if (segments[1] !== "complete") router.replace("/(auth)/complete");
       return;
     }

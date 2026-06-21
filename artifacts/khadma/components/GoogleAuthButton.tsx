@@ -14,7 +14,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLang } from "@/context/LanguageContext";
 import type { AuthSessionPayload } from "@/lib/authSession";
-import { authClient, withAuthTimeout } from "@/lib/neonAuth";
+import {
+  authClient,
+  OAUTH_TIMEOUT_MS,
+  withAuthTimeout,
+} from "@/lib/neonAuth";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -45,16 +49,14 @@ export function GoogleAuthButton({ label }: { label?: string }) {
           provider: "google",
           callbackURL,
         }),
+        OAUTH_TIMEOUT_MS,
       );
       if (authError) {
         console.error("Google sign-in failed:", authError);
         setError(t.auth.loginFailed);
         return;
       }
-      let ok = await completeAuthLogin(data as AuthSessionPayload);
-      if (!ok) {
-        ok = await completeAuthLogin({});
-      }
+      const ok = await completeAuthLogin((data ?? {}) as AuthSessionPayload);
       if (!ok) {
         setError(t.auth.finalizeFailed);
         return;

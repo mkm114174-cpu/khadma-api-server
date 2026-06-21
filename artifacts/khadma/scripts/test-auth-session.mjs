@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 /**
- * Smoke test for auth session persistence logic (Node shim for SecureStore).
+ * Smoke test for auth session + JWT logic (Node shim for SecureStore).
  */
 import assert from "node:assert/strict";
 
 const store = new Map();
 
 const SecureStore = {
-  setItem(key, value) {
+  setItemAsync: async (key, value) => {
     store.set(key, value);
   },
-  getItem(key) {
-    return store.get(key) ?? null;
+  getItem: (key) => store.get(key) ?? null,
+  getItemAsync: async (key) => store.get(key) ?? null,
+  deleteItemAsync: async (key) => {
+    store.delete(key);
   },
 };
 
-// Inline minimal copy of authSession helpers for node test
-const COOKIE_STORE_KEY = "khadma_cookie";
 const SESSION_CACHE_KEY = "khadma_session_data";
-const COOKIE_PREFIX = "better-auth";
+const JWT_STORE_KEY = "khadma_jwt";
 
 function sessionToken(payload) {
   const fromSession = payload.session?.token;
@@ -27,42 +27,56 @@ function sessionToken(payload) {
   return null;
 }
 
-function persistAuthSession(payload) {
+async function persistAuthSession(payload) {
   const token = sessionToken(payload);
   const user = payload.user;
   if (!token || !user) return false;
-  SecureStore.setItem(
-    COOKIE_STORE_KEY,
-    JSON.stringify({
-      [`${COOKIE_PREFIX}.session_token`]: { value: token, expires: null },
-    }),
-  );
-  SecureStore.setItem(
+  await SecureStore.setItemAsync(
     SESSION_CACHE_KEY,
     JSON.stringify({ user, session: { token } }),
   );
   return true;
 }
 
-function readCachedSession() {
-  const raw = SecureStore.getItem(SESSION_CACHE_KEY);
-  if (!raw) return null;
-  const parsed = JSON.parse(raw);
-  const token = sessionToken(parsed);
-  if (!token || !parsed.user) return null;
-  return { user: parsed.user, session: { token } };
+async function persistAuthJwt(jwt) {
+  if (jwt) await SecureStore.setItemAsync(JWT_STORE_KEY, jwt);
 }
 
-// Email OTP shape from Better Auth
+function readCachedJwt() {
+  return SecureStore.getItem(JWT_STORE_KEY);
+}
+
+function isJwtValid(jwt) {
+  if (!jwt) return false;
+  try {
+    const parts = jwt.split(".");
+    if (parts.length < 2) return false;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+    if (!payload.exp) return true;
+    return payload.exp * 1000 > Date.now() + 60_000;
+  } catch {
+    return false;
+  }
+}
+
+// OTP response shape from Better Auth
 const otpResult = {
-  token: "sess_tok_abc123",
+  token: "opaque_sess_abc123",
   user: { id: "u1", email: "test@example.com", name: "Test" },
 };
 
-assert.equal(persistAuthSession(otpResult), true);
-const cached = readCachedSession();
-assert.ok(cached);
-assert.equal(cached.session.token, "sess_tok_abc123");
-assert.equal(cached.user.email, "test@example.com");
+assert.equal(await persistAuthSession(otpResult), true);
 
-console.log("auth session smoke test: OK");
+// Simulate JWT exchange result
+const fakeJwt =
+  "eyJhbGciOiJFZERTQSJ9." +
+  Buffer.from(
+    JSON.stringify({ sub: "u1", exp: Math.floor(Date.now() / 1000) + 3600 }),
+  ).toString("base64url") +
+  ".signature";
+
+await persistAuthJwt(fakeJwt);
+assert.ok(isJwtValid(readCachedJwt()));
+assert.ok(!isJwtValid("opaque_sess_abc123"), "opaque token must not pass as JWT");
+
+console.log("auth session + JWT smoke test: OK");
