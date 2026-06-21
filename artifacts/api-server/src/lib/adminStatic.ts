@@ -41,10 +41,6 @@ export function mountAdminApp(app: Express): void {
 
   logger.info({ adminDir }, "Serving admin panel");
 
-  app.get("/admin", (_req, res) => {
-    res.redirect(301, `${ADMIN_MOUNT}/`);
-  });
-
   app.use(`${ADMIN_MOUNT}`, express.static(adminDir, { index: "index.html" }));
 
   // SPA fallback for client-side routes (e.g. /admin/dashboard).
