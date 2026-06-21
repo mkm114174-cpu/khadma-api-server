@@ -209,7 +209,17 @@ export default function EmailCodeScreen() {
           setError(t.auth.invalidCode);
           return;
         }
-        await finishLogin(data as AuthSessionPayload);
+        // Don't block UI on API profile fetch — session is enough to advance.
+        const sessionOk = await completeAuthLogin(data as AuthSessionPayload);
+        if (!sessionOk) {
+          setError(t.auth.finalizeFailed);
+          return;
+        }
+        await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
+        const lang = await AsyncStorage.getItem("khadma.lang");
+        setPhase(
+          lang === "ar" || lang === "en" || lang === "he" ? "welcome" : "language",
+        );
         return;
       }
 

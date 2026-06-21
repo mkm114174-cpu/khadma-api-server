@@ -178,33 +178,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSessionLoaded(true);
       setResolved(false);
 
-      try {
-        const current = await withAuthTimeout(getCurrentUser(), LOAD_USER_TIMEOUT_MS);
-        setUser(current);
-        setLoadError(false);
-        return true;
-      } catch (err) {
-        setUser(null);
-        if (err instanceof ApiError && err.status === 404) {
+      // Load profile in background — 404 means needsProvision (OK).
+      void withAuthTimeout(getCurrentUser(), LOAD_USER_TIMEOUT_MS)
+        .then((current) => {
+          setUser(current);
           setLoadError(false);
-          return true;
-        }
-        if (
-          err instanceof ApiError &&
-          (err.status === 401 || err.status === 403)
-        ) {
-          console.warn("[Auth] API rejected JWT after login — signing out");
-          await signOutAuth();
-          setIsSignedIn(false);
-          setLoadError(false);
-          return false;
-        }
-        console.error("Failed to load current user after login", err);
-        setLoadError(true);
-        return false;
-      } finally {
-        setResolved(true);
-      }
+        })
+        .catch((err) => {
+          setUser(null);
+          if (err instanceof ApiError && err.status === 404) {
+            setLoadError(false);
+            return;
+          }
+          if (
+            err instanceof ApiError &&
+            (err.status === 401 || err.status === 403)
+          ) {
+            console.warn("[Auth] API rejected token after login");
+            void signOutAuth().then(() => {
+              setIsSignedIn(false);
+              setLoadError(false);
+            });
+            return;
+          }
+          console.error("Failed to load current user after login", err);
+          setLoadError(true);
+        })
+        .finally(() => {
+          setResolved(true);
+        });
+
+      return true;
     },
     [],
   );

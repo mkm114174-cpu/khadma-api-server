@@ -178,43 +178,59 @@ export async function finalizeAuthSession(
     await persistAuthSession(payload);
   }
 
-  const jwt = await refreshApiJwt(
-    typeof opaque === "string" ? opaque : null,
-  );
+  // Best-effort JWT for faster API calls; opaque token also works (API introspects).
+  if (typeof opaque === "string") {
+    await refreshApiJwt(opaque);
+  } else {
+    await refreshApiJwt();
+  }
 
-  if (isJwtValid(jwt)) {
+  if (readCachedSession()?.user) {
     notifySessionChanged();
     return true;
   }
 
-  // OAuth may have stored signed cookies without user in response body.
-  const jwtRetry = await refreshApiJwt();
-  if (isJwtValid(jwtRetry)) {
-    notifySessionChanged();
-    return true;
+  try {
+    const { data } = await withAuthTimeout(authClient.getSession());
+    if (data?.user && data.session) {
+      await persistAuthSession(data as AuthSessionPayload);
+      await refreshApiJwt();
+      notifySessionChanged();
+      return true;
+    }
+  } catch (err) {
+    console.warn("[neonAuth] finalizeAuthSession getSession failed:", err);
   }
 
   return false;
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  const cached = readCachedJwt();
-  if (isJwtValid(cached)) return cached;
-  return refreshApiJwt();
+  const jwt = readCachedJwt();
+  if (isJwtValid(jwt)) return jwt;
+
+  const opaque = readCachedSession()?.session.token ?? null;
+  if (opaque) {
+    const refreshed = await refreshApiJwt(opaque);
+    if (isJwtValid(refreshed)) return refreshed;
+    // API accepts opaque session token via Neon introspection
+    return opaque;
+  }
+
+  const fallback = await refreshApiJwt();
+  if (isJwtValid(fallback)) return fallback;
+  return readCachedSession()?.session.token ?? null;
 }
 
 export async function hasActiveSession(): Promise<boolean> {
-  if (readCachedSession()) {
-    const jwt = await refreshApiJwt();
-    if (isJwtValid(jwt)) return true;
-  }
+  if (readCachedSession()?.user) return true;
 
   try {
     const { data } = await withAuthTimeout(authClient.getSession());
     if (data?.session && data?.user) {
       await persistAuthSession(data as AuthSessionPayload);
-      const jwt = await refreshApiJwt();
-      return isJwtValid(jwt);
+      await refreshApiJwt();
+      return true;
     }
   } catch (err) {
     console.warn("[neonAuth] getSession failed:", err);
