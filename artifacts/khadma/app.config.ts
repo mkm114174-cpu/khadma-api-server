@@ -10,7 +10,7 @@ const routerOrigin = apiDomain
 const config: ExpoConfig = {
   name: "Khadma",
   slug: "khadma",
-  version: "1.0.11",
+  version: "1.0.12",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "khadma",

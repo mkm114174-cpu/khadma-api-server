@@ -1,8 +1,10 @@
 import { Redirect } from "wouter";
-import { useGetCurrentUser } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
+import { provisionUser, useGetCurrentUser } from "@workspace/api-client-react";
 import { Loader2, ShieldAlert, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthSession } from "@/context/AuthContext";
+import { authClient } from "@/lib/neonAuth";
 
 function getErrorStatus(error: unknown): number | undefined {
   if (error && typeof error === "object" && "status" in error) {
@@ -26,8 +28,39 @@ function FullScreenLoader() {
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { sessionLoaded, isSignedIn, logout } = useAuthSession();
   const { data: user, isLoading, error, refetch, isFetching } = useGetCurrentUser();
+  const [bootstrapping, setBootstrapping] = useState(false);
 
-  if (!sessionLoaded) {
+  useEffect(() => {
+    if (!isSignedIn || isLoading || user || bootstrapping) return;
+    if (getErrorStatus(error) !== 404) return;
+
+    let cancelled = false;
+    void (async () => {
+      setBootstrapping(true);
+      try {
+        const { data } = await authClient.getSession();
+        const email = data?.user?.email?.trim().toLowerCase() ?? "";
+        const name = data?.user?.name?.trim() || email.split("@")[0] || "Admin";
+        await provisionUser({
+          name,
+          role: "customer",
+          email: email || undefined,
+          language: "ar",
+        });
+        if (!cancelled) await refetch();
+      } catch (err) {
+        console.error("[AuthGate] admin bootstrap failed:", err);
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, isLoading, user, error, bootstrapping, refetch]);
+
+  if (!sessionLoaded || bootstrapping) {
     return <FullScreenLoader />;
   }
 

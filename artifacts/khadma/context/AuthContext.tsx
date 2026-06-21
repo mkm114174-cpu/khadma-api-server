@@ -9,13 +9,7 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import {
-  ApiError,
-  getCurrentUser,
-  provisionUser,
-  setAuthTokenGetter,
-  type User,
-} from "@workspace/api-client-react";
+import { ApiError, getCurrentUser, provisionUser, setAuthTokenGetter, type User } from "@workspace/api-client-react";
 import {
   finalizeAuthSession,
   getAccessToken,
@@ -177,6 +171,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [sessionLoaded, isSignedIn, loadUser]);
 
   const provision = useCallback(async (input: ProvisionInput) => {
+    const token = await getAccessToken();
+    if (!token) {
+      throw new Error("No auth token for provision");
+    }
     const created = await provisionUser({
       name: input.name,
       role: input.role,

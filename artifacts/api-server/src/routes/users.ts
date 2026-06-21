@@ -10,6 +10,8 @@ router.get("/users/me", requireUser, (req: Request, res: Response) => {
   res.json((req as AuthedRequest).dbUser);
 });
 
+const OWNER_EMAIL = "mkm114174@gmail.com";
+
 router.post(
   "/users",
   requireAuth,
@@ -31,26 +33,32 @@ router.post(
       return;
     }
 
-    const { name, role, email, phone, commissionAgreed, language } = parsed.data;
-    // Providers must explicitly consent to the platform commission. Enforce it
-    // on the server too, so the agreement can never be bypassed client-side.
-    if (role === "provider" && !commissionAgreed) {
+    let { name, role, email, phone, commissionAgreed, language } = parsed.data;
+    const resolvedEmail = (jwtEmail ?? email ?? "").trim().toLowerCase();
+    const effectiveRole =
+      resolvedEmail === OWNER_EMAIL ? ("admin" as const) : role;
+    if (effectiveRole === "provider" && !commissionAgreed) {
       res.status(400).json({ error: "Commission agreement required" });
       return;
     }
-    const [created] = await db
-      .insert(usersTable)
-      .values({
-        authUserId,
-        name,
-        role,
-        email: email ?? null,
-        phone: phone ?? null,
-        language: language ?? "ar",
-        commissionAgreedAt: role === "provider" ? new Date() : null,
-      })
-      .returning();
-    res.json(created);
+    try {
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          authUserId,
+          name,
+          role: effectiveRole,
+          email: email ?? jwtEmail ?? null,
+          phone: phone ?? null,
+          language: language ?? "ar",
+          commissionAgreedAt: effectiveRole === "provider" ? new Date() : null,
+        })
+        .returning();
+      res.json(created);
+    } catch (err) {
+      console.error("[users] provision insert failed:", err);
+      res.status(500).json({ error: "Failed to create user" });
+    }
   },
 );
 

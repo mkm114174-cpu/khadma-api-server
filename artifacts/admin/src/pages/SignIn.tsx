@@ -33,11 +33,16 @@ export function SignInPage() {
         type: "sign-in",
       });
       if (sendError) {
-        setError("تعذّر إرسال الرمز. تحقّق من البريد وحاول مرة أخرى.");
+        const msg =
+          typeof sendError === "object" && sendError && "message" in sendError
+            ? String((sendError as { message?: string }).message)
+            : "";
+        setError(msg || "تعذّر إرسال الرمز. تحقّق من البريد وحاول مرة أخرى.");
         return;
       }
       setPhase("code");
-    } catch {
+    } catch (err) {
+      console.error("[admin] sendVerificationOtp failed:", err);
       setError("تعذّر الاتصال بخدمة المصادقة.");
     } finally {
       setBusy(false);

@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ProviderOnboarding from "@/components/provider/ProviderOnboarding";
 import { LogoIcon } from "@/components/LogoIcon";
 import { useColors } from "@/hooks/useColors";
+import { ApiError } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLang } from "@/context/LanguageContext";
 import { authClient } from "@/lib/neonAuth";
@@ -62,6 +63,10 @@ export default function CompleteProfileScreen() {
       // AuthGate redirects automatically once the profile is created.
     } catch (err) {
       console.error("Provision failed:", err);
+      if (err instanceof ApiError && err.status === 401) {
+        setError(t.auth.finalizeFailed);
+        return;
+      }
       setError(t.auth.provisionError);
     } finally {
       setSubmitting(false);
