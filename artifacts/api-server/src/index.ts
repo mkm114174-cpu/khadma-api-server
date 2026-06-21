@@ -1,5 +1,5 @@
 import app from "./app";
-import { verifyCoreTables } from "./lib/ensureDatabase";
+import { ensureDatabaseSchema, verifyCoreTables } from "./lib/ensureDatabase";
 import { logger } from "./lib/logger";
 import { startReassignSweep } from "./lib/reassign";
 
@@ -18,9 +18,10 @@ app.listen(port, "0.0.0.0", async (err) => {
   logger.info({ port }, "Server listening on 0.0.0.0");
 
   try {
+    await ensureDatabaseSchema();
     await verifyCoreTables();
   } catch (err) {
-    logger.error({ err }, "Database schema verification failed");
+    logger.error({ err }, "Database schema setup failed");
   }
 
   try {
