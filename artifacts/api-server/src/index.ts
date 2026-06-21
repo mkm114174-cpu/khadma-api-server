@@ -21,11 +21,9 @@ app.listen(port, "0.0.0.0", async (err) => {
     await seedSkills();
     logger.info("Skills seeded (if not already present)");
   } catch (err) {
-    logger.error({ err }, "Failed to seed skills");
-    if (process.env.NODE_ENV === "production") {
-      logger.error("Exiting — skills seed is required in production");
-      process.exit(1);
-    }
+    // Do not crash the process — auth and provisioning must stay up even if
+    // skills seed fails (e.g. schema not yet synced). /api/healthz reports DB state.
+    logger.error({ err }, "Failed to seed skills (server will continue)");
   }
 
   startReassignSweep();
