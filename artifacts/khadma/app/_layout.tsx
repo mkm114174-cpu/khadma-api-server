@@ -39,6 +39,10 @@ if (domain) setBaseUrl(`https://${domain}`);
 
 const queryClient = new QueryClient();
 
+export const unstable_settings = {
+  initialRouteName: "index",
+};
+
 function AuthGate() {
   const { status, role, refresh, logout } = useAuth();
   const segments = useSegments();
@@ -77,6 +81,8 @@ function AuthGate() {
     }
 
     if (status === "needsProvision") {
+      // Let email-code finish welcome splash before redirecting to complete.
+      if (segments[1] === "email-code") return;
       if (segments[1] !== "complete") router.replace("/(auth)/complete");
       return;
     }
@@ -116,7 +122,7 @@ function AuthGate() {
         <Stack.Screen name="rate-app" options={{ headerShown: false, animation: "slide_from_right" }} />
       </Stack>
       {status === "ready" && <NotificationCenter />}
-      {status === "loading" && (
+      {status === "loading" && segments[0] !== "(auth)" && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingContent}>
             <ActivityIndicator size="large" color={C.primary} />

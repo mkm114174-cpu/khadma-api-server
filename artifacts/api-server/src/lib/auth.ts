@@ -10,6 +10,7 @@ import {
 
 export interface AuthedRequest extends Request {
   authUserId?: string;
+  authEmail?: string | null;
   dbUser?: User;
 }
 
@@ -93,12 +94,13 @@ export const requireAuth = async (
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  const authUserId = await getAuthUserId(req);
-  if (!authUserId) {
+  const auth = await getVerifiedAuth(req);
+  if (!auth) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  (req as AuthedRequest).authUserId = authUserId;
+  (req as AuthedRequest).authUserId = auth.authUserId;
+  (req as AuthedRequest).authEmail = auth.email;
   next();
 };
 

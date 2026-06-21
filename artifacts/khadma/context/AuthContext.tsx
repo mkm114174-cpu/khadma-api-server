@@ -15,7 +15,14 @@ import {
   setAuthTokenGetter,
   type User,
 } from "@workspace/api-client-react";
-import { authClient, getAccessToken, hasActiveSession } from "@/lib/neonAuth";
+import {
+  finalizeAuthSession,
+  getAccessToken,
+  hasActiveSession,
+  signOutAuth,
+  withAuthTimeout,
+} from "@/lib/neonAuth";
+import type { AuthSessionPayload } from "@/lib/authSession";
 
 export type AppRole = "customer" | "provider" | "admin";
 
@@ -49,11 +56,16 @@ interface AuthContextValue {
   provision: (input: ProvisionInput) => Promise<void>;
   refresh: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  completeAuthLogin: (payload: AuthSessionPayload) => Promise<boolean>;
   logout: () => Promise<void>;
   setGuest: (guest: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+/** Never block the UI longer than this while checking auth on launch. */
+const BOOT_TIMEOUT_MS = 6_000;
+const LOAD_USER_TIMEOUT_MS = 10_000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -70,30 +82,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem("khadma:demo").then((val) => {
-      setIsGuest(val === "true");
-      setGuestResolved(true);
-    });
+    AsyncStorage.getItem("khadma:demo")
+      .then((val) => {
+        setIsGuest(val === "true");
+      })
+      .catch(() => {
+        setIsGuest(false);
+      })
+      .finally(() => {
+        setGuestResolved(true);
+      });
   }, []);
 
   const refreshSession = useCallback(async () => {
-    const active = await hasActiveSession();
-    setIsSignedIn(active);
-    setSessionLoaded(true);
+    try {
+      const active = await hasActiveSession();
+      setIsSignedIn(active);
+    } catch (err) {
+      console.warn("[Auth] session check failed", err);
+      setIsSignedIn(false);
+    } finally {
+      setSessionLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
 
+  // Safety net: never leave the splash/loading overlay up forever on slow networks.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSessionLoaded(true);
+      setGuestResolved(true);
+    }, BOOT_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   const loadUser = useCallback(async () => {
     try {
-      const current = await getCurrentUser();
+      const current = await withAuthTimeout(getCurrentUser(), LOAD_USER_TIMEOUT_MS);
       setUser(current);
       setLoadError(false);
     } catch (err) {
       setUser(null);
       if (err instanceof ApiError && err.status === 404) {
+        setLoadError(false);
+      } else if (
+        err instanceof ApiError &&
+        (err.status === 401 || err.status === 403)
+      ) {
+        console.warn("[Auth] session rejected by API — signing out");
+        await signOutAuth();
+        setIsSignedIn(false);
         setLoadError(false);
       } else {
         console.error("Failed to load current user", err);
@@ -128,8 +169,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(created);
   }, []);
 
+  const completeAuthLogin = useCallback(
+    async (payload: AuthSessionPayload) => {
+      const ok = await finalizeAuthSession(payload);
+      if (!ok) return false;
+
+      setIsSignedIn(true);
+      setSessionLoaded(true);
+      setResolved(false);
+
+      // Load profile in background — 404 means needsProvision (OK).
+      void withAuthTimeout(getCurrentUser(), LOAD_USER_TIMEOUT_MS)
+        .then((current) => {
+          setUser(current);
+          setLoadError(false);
+        })
+        .catch((err) => {
+          setUser(null);
+          if (err instanceof ApiError && err.status === 404) {
+            setLoadError(false);
+            return;
+          }
+          if (
+            err instanceof ApiError &&
+            (err.status === 401 || err.status === 403)
+          ) {
+            console.warn("[Auth] API rejected token after login");
+            void signOutAuth().then(() => {
+              setIsSignedIn(false);
+              setLoadError(false);
+            });
+            return;
+          }
+          console.error("Failed to load current user after login", err);
+          setLoadError(true);
+        })
+        .finally(() => {
+          setResolved(true);
+        });
+
+      return true;
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
-    await authClient.signOut();
+    await signOutAuth();
     setIsSignedIn(false);
     setUser(null);
     setLoadError(false);
@@ -182,6 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provision,
       refresh,
       refreshSession,
+      completeAuthLogin,
       logout: async () => {
         await AsyncStorage.removeItem("khadma:demo");
         setIsGuest(false);
@@ -189,7 +275,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       setGuest,
     }),
-    [status, user, isGuest, provision, refresh, refreshSession, logout, setGuest],
+    [status, user, isGuest, provision, refresh, refreshSession, completeAuthLogin, logout, setGuest],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

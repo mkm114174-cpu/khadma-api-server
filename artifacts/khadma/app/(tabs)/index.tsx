@@ -62,18 +62,19 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { lang, isRTL, t } = useLang();
-  const { name: userName } = useAuth();
+  const { name: userName, isLoggedIn } = useAuth();
 
-  const notificationsQ = useListNotifications();
+  const notificationsQ = useListNotifications({
+    query: { enabled: isLoggedIn },
+  });
   const unreadCount = (notificationsQ.data ?? []).filter((n) => !n.isRead).length;
 
   const [locationName, setLocationName] = useState("");
   const [searchText, setSearchText] = useState("");
   const [locating, setLocating] = useState(false);
 
-  // Keep existing data fetching
-  const providersQ = useListProviders();
-  const myRequestsQ = useListRequests({ mine: true });
+  const providersQ = useListProviders(undefined, { query: { enabled: isLoggedIn } });
+  const myRequestsQ = useListRequests({ mine: true }, { query: { enabled: isLoggedIn } });
 
   const topInset = Platform.OS === "web" ? 20 : insets.top;
 

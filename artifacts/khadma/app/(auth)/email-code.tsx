@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -17,12 +17,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
 
+import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import { LogoIcon } from "@/components/LogoIcon";
 import { WelcomeSplash } from "@/components/WelcomeSplash";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLang } from "@/context/LanguageContext";
-import { authClient } from "@/lib/neonAuth";
+import type { AuthSessionPayload } from "@/lib/authSession";
+import { authClient, hasActiveSession, withAuthTimeout } from "@/lib/neonAuth";
 
 const { width } = Dimensions.get("window");
 const STATIC_LANGUAGES = [
@@ -37,10 +39,23 @@ type Phase = "email" | "code" | "language" | "welcome";
 type Mode = "signIn" | "signUp";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SIGNUP_PWD_KEY = "khadma:signUpPassword";
 
 function errorMessage(error: unknown): string | undefined {
   const e = error as { message?: string } | null;
   return e?.message;
+}
+
+function isUserNotFoundError(error: unknown): boolean {
+  const e = error as { message?: string; code?: string; status?: number } | null;
+  if (e?.status === 404) return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return (
+    msg.includes("not found") ||
+    msg.includes("does not exist") ||
+    msg.includes("no user") ||
+    e?.code === "USER_NOT_FOUND"
+  );
 }
 
 export default function EmailCodeScreen() {
@@ -49,18 +64,33 @@ export default function EmailCodeScreen() {
   const insets = useSafeAreaInsets();
   const { t, isRTL, setLang } = useLang();
   const router = useRouter();
-  const { refreshSession } = useAuth();
+  const { completeAuthLogin, refreshSession } = useAuth();
 
   const [phase, setPhase] = useState<Phase>("email");
   const [mode, setMode] = useState<Mode>("signIn");
+  const [intendedRole, setIntendedRole] = useState<"customer" | "provider">(
+    "customer",
+  );
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [signUpPassword, setSignUpPassword] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    AsyncStorage.getItem("khadma:intendedRole").then((stored) => {
+      if (stored === "provider" || stored === "customer") {
+        setIntendedRole(stored);
+      }
+    });
+    AsyncStorage.getItem(SIGNUP_PWD_KEY).then((stored) => {
+      if (stored) setSignUpPassword(stored);
+    });
+  }, []);
+
   const emailValid = EMAIL_RE.test(email.trim());
   const codeValid = code.trim().length >= 6;
+  const isProvider = intendedRole === "provider";
 
   const sendCode = async () => {
     if (!emailValid || busy) return;
@@ -68,37 +98,49 @@ export default function EmailCodeScreen() {
     setError(null);
     const addr = email.trim().toLowerCase();
     try {
-      const { error: signInError } =
-        await authClient.emailOtp.sendVerificationOtp({
+      const { error: signInError } = await withAuthTimeout(
+        authClient.emailOtp.sendVerificationOtp({
           email: addr,
           type: "sign-in",
-        });
+        }),
+      );
 
       if (!signInError) {
         setSignUpPassword(null);
+        await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
         setMode("signIn");
         setPhase("code");
         return;
       }
 
+      if (!isUserNotFoundError(signInError)) {
+        setError(errorMessage(signInError) ?? t.auth.serverError);
+        return;
+      }
+
       const tempPassword = Crypto.randomUUID();
       setSignUpPassword(tempPassword);
-      const { error: signUpError } = await authClient.signUp.email({
-        email: addr,
-        password: tempPassword,
-        name: addr.split("@")[0] ?? "User",
-      });
+      await AsyncStorage.setItem(SIGNUP_PWD_KEY, tempPassword);
+      const { error: signUpError } = await withAuthTimeout(
+        authClient.signUp.email({
+          email: addr,
+          password: tempPassword,
+          name: addr.split("@")[0] ?? "User",
+        }),
+      );
       if (signUpError) {
         setSignUpPassword(null);
+        await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
         setError(errorMessage(signUpError) ?? t.auth.signupFailed);
         return;
       }
 
-      const { error: verifySendError } =
-        await authClient.emailOtp.sendVerificationOtp({
+      const { error: verifySendError } = await withAuthTimeout(
+        authClient.emailOtp.sendVerificationOtp({
           email: addr,
           type: "email-verification",
-        });
+        }),
+      );
       if (verifySendError) {
         setError(errorMessage(verifySendError) ?? t.auth.serverError);
         return;
@@ -120,15 +162,33 @@ export default function EmailCodeScreen() {
     setError(null);
     const addr = email.trim().toLowerCase();
     try {
-      await authClient.emailOtp.sendVerificationOtp({
-        email: addr,
-        type: mode === "signIn" ? "sign-in" : "email-verification",
-      });
+      await withAuthTimeout(
+        authClient.emailOtp.sendVerificationOtp({
+          email: addr,
+          type: mode === "signIn" ? "sign-in" : "email-verification",
+        }),
+      );
     } catch (err) {
       console.error("resend failed:", err);
     } finally {
       setBusy(false);
     }
+  };
+
+  const finishLogin = async (payload: AuthSessionPayload | null | undefined) => {
+    const ok = await completeAuthLogin(payload ?? {});
+    if (!ok) {
+      setError(t.auth.finalizeFailed);
+      return false;
+    }
+    await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
+    const lang = await AsyncStorage.getItem("khadma.lang");
+    if (lang === "ar" || lang === "en" || lang === "he") {
+      setPhase("welcome");
+    } else {
+      setPhase("language");
+    }
+    return true;
   };
 
   const verify = async () => {
@@ -139,37 +199,55 @@ export default function EmailCodeScreen() {
     const value = code.trim();
     try {
       if (mode === "signIn") {
-        const { error: verifyError } = await authClient.signIn.emailOtp({
-          email: addr,
-          otp: value,
-        });
+        const { data, error: verifyError } = await withAuthTimeout(
+          authClient.signIn.emailOtp({
+            email: addr,
+            otp: value,
+          }),
+        );
         if (verifyError) {
           setError(t.auth.invalidCode);
           return;
         }
-      } else {
-        const { error: verifyError } = await authClient.emailOtp.verifyEmail({
-          email: addr,
-          otp: value,
-        });
-        if (verifyError) {
-          setError(t.auth.invalidCode);
+        // Don't block UI on API profile fetch — session is enough to advance.
+        const sessionOk = await completeAuthLogin(data as AuthSessionPayload);
+        if (!sessionOk) {
+          setError(t.auth.finalizeFailed);
           return;
         }
-
-        // verifyEmail confirms the address but does not always create a session.
-        const { error: signInError } = await authClient.signIn.email({
-          email: addr,
-          password: signUpPassword ?? "",
-        });
-        if (signInError) {
-          setError(t.auth.loginFailed);
-          return;
-        }
+        await AsyncStorage.removeItem(SIGNUP_PWD_KEY);
+        const lang = await AsyncStorage.getItem("khadma.lang");
+        setPhase(
+          lang === "ar" || lang === "en" || lang === "he" ? "welcome" : "language",
+        );
+        return;
       }
 
-      await refreshSession();
-      setPhase("language");
+      const { error: verifyError } = await withAuthTimeout(
+        authClient.emailOtp.verifyEmail({
+          email: addr,
+          otp: value,
+        }),
+      );
+      if (verifyError) {
+        setError(t.auth.invalidCode);
+        return;
+      }
+
+      const { data, error: signInError } = await withAuthTimeout(
+        authClient.signIn.email({
+          email: addr,
+          password:
+            signUpPassword ??
+            (await AsyncStorage.getItem(SIGNUP_PWD_KEY)) ??
+            "",
+        }),
+      );
+      if (signInError) {
+        setError(t.auth.loginFailed);
+        return;
+      }
+      await finishLogin(data as AuthSessionPayload);
     } catch (err) {
       console.error("verify failed:", err);
       setError(t.auth.verifyFailed);
@@ -180,13 +258,20 @@ export default function EmailCodeScreen() {
 
   const enterApp = useCallback(async () => {
     try {
+      const active = await hasActiveSession();
+      if (!active) {
+        setError(t.auth.finalizeFailed);
+        setPhase("code");
+        return;
+      }
       await refreshSession();
+      router.replace("/(auth)/complete");
     } catch (err) {
       console.error("[enterApp] failed:", err);
       setError(t.auth.finalizeFailed);
       setPhase("code");
     }
-  }, [refreshSession, t.auth.finalizeFailed]);
+  }, [refreshSession, router, t.auth.finalizeFailed]);
 
   if (phase === "language") {
     return (
@@ -251,8 +336,14 @@ export default function EmailCodeScreen() {
           <LogoIcon size={80} />
           <Text style={styles.appName}>{t.auth.appName}</Text>
           <View style={styles.roleBadge}>
-            <Feather name="user" size={13} color={Y} />
-            <Text style={styles.roleText}>{t.auth.customer}</Text>
+            <Feather
+              name={isProvider ? "tool" : "user"}
+              size={13}
+              color={Y}
+            />
+            <Text style={styles.roleText}>
+              {isProvider ? t.auth.provider : t.auth.customer}
+            </Text>
           </View>
         </View>
 
@@ -286,6 +377,18 @@ export default function EmailCodeScreen() {
                 {busy ? t.auth.sending : t.auth.sendCode}
               </Text>
             </Pressable>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.line} />
+              <Text style={styles.orText}>{t.auth.or}</Text>
+              <View style={styles.line} />
+            </View>
+
+            <GoogleAuthButton
+              label={
+                isProvider ? t.auth.signUpGoogle : t.auth.signInGoogle
+              }
+            />
 
             <Pressable onPress={() => router.back()}>
               <Text style={styles.backLink}>{t.auth.back}</Text>
@@ -425,6 +528,14 @@ const makeStyles = (C: ReturnType<typeof useColors>) =>
       fontWeight: "600",
     },
     backLink: { color: C.mutedForeground, fontSize: 14, textAlign: "center" },
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginVertical: 4,
+    },
+    line: { flex: 1, height: 1, backgroundColor: C.border },
+    orText: { fontSize: 13, color: C.mutedForeground },
   });
 
 const stylesLang = StyleSheet.create({

@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { ProvisionUserBody, UpdateCurrentUserBody } from "@workspace/api-zod";
-import { requireAuth, requireUser, type AuthedRequest } from "../lib/auth";
+import { requireAuth, requireUser, resolveDbUser, type AuthedRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -20,15 +20,17 @@ router.post(
       return;
     }
     const authUserId = (req as AuthedRequest).authUserId!;
-    const [existing] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.authUserId, authUserId))
-      .limit(1);
+    const jwtEmail = (req as AuthedRequest).authEmail ?? null;
+
+    const existing = await resolveDbUser(
+      authUserId,
+      jwtEmail ?? parsed.data.email ?? null,
+    );
     if (existing) {
       res.json(existing);
       return;
     }
+
     const { name, role, email, phone, commissionAgreed, language } = parsed.data;
     // Providers must explicitly consent to the platform commission. Enforce it
     // on the server too, so the agreement can never be bypassed client-side.
