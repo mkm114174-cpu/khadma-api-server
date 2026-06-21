@@ -2,7 +2,6 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
-import { mountAdminApp } from "./lib/adminStatic";
 import { errorHandler } from "./lib/errorHandler";
 import { logger } from "./lib/logger";
 
@@ -33,8 +32,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
-
-mountAdminApp(app);
 
 app.use(errorHandler);
 

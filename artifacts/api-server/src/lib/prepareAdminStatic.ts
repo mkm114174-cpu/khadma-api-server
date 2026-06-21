@@ -32,6 +32,7 @@ export async function prepareAdminStatic(): Promise<void> {
   const root = findMonorepoRoot();
   const candidates = [
     path.join(root, "artifacts/api-server/dist/admin-static"),
+    path.join(root, "artifacts/api-server/admin-bundle"),
     path.join(root, "artifacts/admin/dist/public"),
   ];
 

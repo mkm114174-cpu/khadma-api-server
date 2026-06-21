@@ -1,5 +1,7 @@
 import app from "./app";
 import { ensureDatabaseSchema, verifyCoreTables } from "./lib/ensureDatabase";
+import { prepareAdminStatic } from "./lib/prepareAdminStatic";
+import { mountAdminApp } from "./lib/adminStatic";
 import { logger } from "./lib/logger";
 import { startReassignSweep } from "./lib/reassign";
 
@@ -16,6 +18,13 @@ app.listen(port, "0.0.0.0", async (err) => {
   }
 
   logger.info({ port }, "Server listening on 0.0.0.0");
+
+  try {
+    await prepareAdminStatic();
+    mountAdminApp(app);
+  } catch (adminErr) {
+    logger.error({ err: adminErr }, "Admin panel setup failed");
+  }
 
   try {
     await ensureDatabaseSchema();

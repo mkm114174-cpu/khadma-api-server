@@ -46,7 +46,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
     );
   }
 
-  const root = process.cwd();
+  const root = findMonorepoRoot();
   logger.warn({ missing }, "Database schema incomplete — running drizzle push-force");
 
   execSync("pnpm --filter @workspace/db run push-force", {

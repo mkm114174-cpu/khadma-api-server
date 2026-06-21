@@ -20,6 +20,7 @@ export function resolveAdminStaticDir(): string | null {
     path.resolve(here, "admin-static"),
     path.resolve(here, "../admin-static"),
     path.resolve(root, "artifacts/api-server/dist/admin-static"),
+    path.resolve(root, "artifacts/api-server/admin-bundle"),
     path.resolve(root, "artifacts/admin/dist/public"),
     path.resolve(here, "../../admin/dist/public"),
   ];

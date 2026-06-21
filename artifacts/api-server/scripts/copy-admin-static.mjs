@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const apiRoot = path.resolve(here, "..");
 const adminPublic = path.resolve(apiRoot, "../admin/dist/public");
+const bundled = path.resolve(apiRoot, "admin-bundle");
 const dest = path.resolve(apiRoot, "dist/admin-static");
 
 function copyRecursive(src, dst) {
@@ -21,13 +22,19 @@ function copyRecursive(src, dst) {
   }
 }
 
-if (!fs.existsSync(path.join(adminPublic, "index.html"))) {
+const source = fs.existsSync(path.join(adminPublic, "index.html"))
+  ? adminPublic
+  : fs.existsSync(path.join(bundled, "index.html"))
+    ? bundled
+    : null;
+
+if (!source) {
   console.warn(
-    "copy-admin-static: admin not built — run pnpm --filter @workspace/admin run build first",
+    "copy-admin-static: no admin build found (admin/dist/public or admin-bundle)",
   );
   process.exit(0);
 }
 
 fs.rmSync(dest, { recursive: true, force: true });
-copyRecursive(adminPublic, dest);
-console.log("copy-admin-static: OK →", dest);
+copyRecursive(source, dest);
+console.log("copy-admin-static: OK →", dest, "(from", source + ")");
