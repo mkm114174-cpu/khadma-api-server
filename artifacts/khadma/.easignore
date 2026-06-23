@@ -1,0 +1,10 @@
+# Optional size trims for EAS upload (do not exclude lib/ — workspace packages live there).
+database-backup/
+.agents/
+attached_assets/
+artifacts/admin/
+artifacts/api-server/
+artifacts/mockup-sandbox/
+**/node_modules/
+**/.expo/
+**/static-build/

@@ -1,0 +1,216 @@
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import {
+  ApiError,
+  getCurrentUser,
+  provisionUser,
+  setAuthTokenGetter,
+  type User,
+} from "@workspace/api-client-react";
+import { authClient, clearAccessTokenCache, getAccessToken, hasActiveSession, refreshAccessToken } from "@/lib/neonAuth";
+
+export type AppRole = "customer" | "provider" | "admin";
+
+type AuthStatus =
+  | "loading"
+  | "signedOut"
+  | "needsProvision"
+  | "ready"
+  | "error"
+  | "guest";
+
+export interface ProvisionInput {
+  name: string;
+  role: "customer" | "provider";
+  email?: string;
+  phone?: string;
+  commissionAgreed?: boolean;
+  language?: "ar" | "en" | "he";
+}
+
+interface AuthContextValue {
+  status: AuthStatus;
+  isLoggedIn: boolean;
+  user: User | null;
+  role: AppRole | null;
+  name: string;
+  phone: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  provision: (input: ProvisionInput) => Promise<void>;
+  refresh: () => Promise<void>;
+  refreshSession: () => Promise<void>;
+  logout: () => Promise<void>;
+  setGuest: (guest: boolean) => void;
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function getErrorStatus(err: unknown): number | undefined {
+  if (err instanceof ApiError) return err.status;
+  const status = (err as { status?: unknown })?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [resolved, setResolved] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestResolved, setGuestResolved] = useState(false);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  useEffect(() => {
+    setAuthTokenGetter(() => getAccessToken());
+    return () => setAuthTokenGetter(null);
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem("khadma:demo").then((val) => {
+      setIsGuest(val === "true");
+      setGuestResolved(true);
+    });
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    const active = await hasActiveSession();
+    setIsSignedIn(active);
+    if (active) {
+      await refreshAccessToken();
+    }
+    setSessionLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    void refreshSession();
+  }, [refreshSession]);
+
+  const loadUser = useCallback(async () => {
+    try {
+      const current = await getCurrentUser();
+      setUser(current);
+      setLoadError(false);
+    } catch (err) {
+      setUser(null);
+      if (getErrorStatus(err) === 404) {
+        setLoadError(false);
+      } else {
+        console.error("Failed to load current user", err);
+        setLoadError(true);
+      }
+    } finally {
+      setResolved(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionLoaded) return;
+    if (isSignedIn) {
+      setResolved(false);
+      void loadUser();
+    } else {
+      setUser(null);
+      setLoadError(false);
+      setResolved(true);
+    }
+  }, [sessionLoaded, isSignedIn, loadUser]);
+
+  const provision = useCallback(async (input: ProvisionInput) => {
+    const token = await refreshAccessToken();
+    if (!token) {
+      throw new Error("Missing auth token");
+    }
+    const created = await provisionUser({
+      name: input.name,
+      role: input.role,
+      email: input.email,
+      phone: input.phone,
+      commissionAgreed: input.commissionAgreed,
+      language: input.language,
+    });
+    setUser(created);
+  }, []);
+
+  const logout = useCallback(async () => {
+    await authClient.signOut();
+    clearAccessTokenCache();
+    setIsSignedIn(false);
+    setUser(null);
+    setLoadError(false);
+    setResolved(true);
+  }, []);
+
+  const status: AuthStatus =
+    !sessionLoaded || !guestResolved
+      ? "loading"
+      : isGuest
+        ? "guest"
+        : !isSignedIn
+          ? "signedOut"
+          : !resolved
+            ? "loading"
+            : user
+              ? "ready"
+              : loadError
+                ? "error"
+                : "needsProvision";
+
+  const setGuest = useCallback(async (guest: boolean) => {
+    if (guest) {
+      await AsyncStorage.setItem("khadma:demo", "true");
+    } else {
+      await AsyncStorage.removeItem("khadma:demo");
+    }
+    setIsGuest(guest);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    await refreshSession();
+    if (await hasActiveSession()) {
+      setResolved(false);
+      await loadUser();
+    }
+  }, [loadUser, refreshSession]);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      status,
+      isLoggedIn: status === "ready" || status === "guest",
+      user,
+      role: isGuest ? "customer" : (user?.role as AppRole | undefined) ?? null,
+      name: isGuest ? "Guest" : user?.name ?? "",
+      phone: isGuest ? "" : user?.phone ?? "",
+      address: isGuest ? "" : user?.address ?? "",
+      lat: user?.lat ?? null,
+      lng: user?.lng ?? null,
+      provision,
+      refresh,
+      refreshSession,
+      logout: async () => {
+        await AsyncStorage.removeItem("khadma:demo");
+        setIsGuest(false);
+        await logout();
+      },
+      setGuest,
+    }),
+    [status, user, isGuest, provision, refresh, refreshSession, logout, setGuest],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
+}

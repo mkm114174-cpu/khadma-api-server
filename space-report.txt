@@ -1,0 +1,23 @@
+
+   MB Path                                 
+   -- ----                                 
+80358 C:\Users\mix                         
+48605 C:\Users\mix\Downloads               
+ 7736 C:\Users\mix\AppData\Local\Temp      
+ 5004 C:\Users\mix\Downloads\android-sdk   
+ 4366 C:\Users\mix\.gradle                 
+ 3813 C:\Users\mix\Downloads\gradle-home   
+ 2380 C:\Users\mix\Downloads\flutter-sdk   
+  665 C:\Users\mix\Downloads\khadma-project
+  330 C:\Users\mix\AppData\Roaming\Cursor  
+
+
+
+
+Name FreeGB UsedGB
+---- ------ ------
+C       2.1  236.3
+D         0      0
+
+
+

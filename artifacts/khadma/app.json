@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "خدمة",
+    "slug": "khadma",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "khadma",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D0D0D"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "نحتاج إلى موقعك لعرض الخدمات القريبة منك",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "نحتاج إلى موقعك لعرض الخدمات القريبة منك"
+      }
+    },
+    "android": {
+      "package": "com.khadma.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "نحتاج إلى موقعك لعرض الخدمات القريبة منك"
+        }
+      ],
+      "expo-audio",
+      "expo-video"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3a8980de-354f-43d2-bcae-34c6177239e9"
+      }
+    },
+    "owner": "s-organization1"
+  }
+}
