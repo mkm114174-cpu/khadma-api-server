@@ -284,12 +284,41 @@ function guardSignInStatus(signIn: SignInResponse | undefined): void {
   }
 }
 
+async function ensureClerkUserExists(email: string): Promise<void> {
+  const normalized = email.trim().toLowerCase();
+  try {
+    await resolveClerkUserId(normalized);
+    return;
+  } catch (err) {
+    if (!(err instanceof ClerkLoginError)) throw err;
+  }
+
+  const createRes = await bapiFetch("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      first_name: "مدير",
+      last_name: "المنصة",
+      email_address: [normalized],
+      skip_password_requirement: true,
+    }),
+  });
+  if (createRes.ok) return;
+
+  try {
+    await resolveClerkUserId(normalized);
+    return;
+  } catch {
+    throw new ClerkLoginError("تعذّر تجهيز حساب Clerk لهذا الإيميل", 500);
+  }
+}
+
 /** الخطوة 1: إرسال كود OTP إلى إيميل الأدمن. */
 export async function clerkAdminSendEmailCode(
   email: string,
 ): Promise<{ loginToken: string }> {
   const normalized = email.trim().toLowerCase();
   await assertAdminEmail(normalized);
+  await ensureClerkUserExists(normalized);
 
   const jar = await initFapiClient();
 
