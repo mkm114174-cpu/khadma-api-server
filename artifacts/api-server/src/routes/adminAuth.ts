@@ -1,127 +1,124 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { resolveDbUser } from "../lib/auth";
+import {
+  ClerkLoginError,
+  clerkAdminPasswordLogin,
+  clerkAdminSendEmailCode,
+  clerkAdminVerifyEmailCode,
+} from "../lib/clerkAdminLogin";
 
 const router: IRouter = Router();
-const CLERK_API = "https://api.clerk.com/v1";
 
-async function clerkApi(
-  path: string,
-  init?: RequestInit,
-): Promise<Response> {
-  const secretKey = process.env.CLERK_SECRET_KEY?.trim();
-  if (!secretKey) {
-    throw new Error("CLERK_SECRET_KEY is not configured");
+function clerkEnvGuard(res: Response): boolean {
+  if (!process.env.CLERK_SECRET_KEY?.trim()) {
+    res.status(503).json({
+      error: "أضف CLERK_SECRET_KEY في إعدادات Render ثم أعد النشر",
+    });
+    return false;
   }
-  return fetch(`${CLERK_API}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/json",
-      ...(init?.headers as Record<string, string> | undefined),
+  if (!process.env.CLERK_PUBLISHABLE_KEY?.trim()) {
+    res.status(503).json({
+      error: "أضف CLERK_PUBLISHABLE_KEY في إعدادات Render ثم أعد النشر",
+    });
+    return false;
+  }
+  return true;
+}
+
+async function finishAdminLogin(
+  res: Response,
+  email: string,
+  sessionJwt: string,
+  authUserId: string,
+): Promise<void> {
+  const dbUser = await resolveDbUser(authUserId, email);
+  if (!dbUser || dbUser.role !== "admin") {
+    res.status(403).json({
+      error: "هذا الحساب ليس أدمن — استخدم حساب إدارة المنصة",
+    });
+    return;
+  }
+
+  res.json({
+    token: sessionJwt,
+    user: {
+      id: dbUser.id,
+      name: dbUser.name,
+      email: dbUser.email,
+      role: dbUser.role,
     },
   });
 }
 
-/** تسجيل دخول الأدمن من تطبيق الموبايل — يتحقق عبر Clerk Backend ثم يُرجع JWT. */
+function handleAuthError(res: Response, err: unknown): void {
+  if (err instanceof ClerkLoginError) {
+    res.status(err.httpStatus).json({ error: err.message });
+    return;
+  }
+  res.status(500).json({
+    error: "تعذّر تسجيل الدخول، حاول مجدداً",
+    detail: err instanceof Error ? err.message : String(err),
+  });
+}
+
+/** الخطوة 1 — إرسال كود OTP إلى إيميل الأدمن. */
+router.post("/admin/auth/send-code", async (req: Request, res: Response) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  if (!email) {
+    res.status(400).json({ error: "أدخل البريد الإلكتروني" });
+    return;
+  }
+  if (!clerkEnvGuard(res)) return;
+
+  try {
+    const result = await clerkAdminSendEmailCode(email);
+    res.json({
+      ok: true,
+      loginToken: result.loginToken,
+      message: "تم إرسال الكود إلى بريدك — تحقق من صندوق الوارد والرسائل المزعجة",
+    });
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+/** الخطوة 2 — التحقق من الكود وإتمام الدخول. */
+router.post("/admin/auth/verify-code", async (req: Request, res: Response) => {
+  const loginToken = String(req.body?.loginToken ?? "").trim();
+  const code = String(req.body?.code ?? "").trim();
+  if (!loginToken || !code) {
+    res.status(400).json({ error: "أدخل الكود المرسل إلى إيميلك" });
+    return;
+  }
+  if (!clerkEnvGuard(res)) return;
+
+  try {
+    const { sessionJwt, authUserId, email } =
+      await clerkAdminVerifyEmailCode(loginToken, code);
+    await finishAdminLogin(res, email, sessionJwt, authUserId);
+  } catch (err) {
+    handleAuthError(res, err);
+  }
+});
+
+/** تسجيل دخول بكلمة المرور (احتياطي). */
 router.post("/admin/auth/login", async (req: Request, res: Response) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
   if (!email || !password) {
-    res.status(400).json({ error: "Email and password required" });
+    res.status(400).json({ error: "أدخل الإيميل وكلمة المرور" });
     return;
   }
-
-  if (!process.env.CLERK_SECRET_KEY?.trim()) {
-    res.status(503).json({
-      error: "CLERK_SECRET_KEY is not configured on the API server",
-    });
-    return;
-  }
+  if (!clerkEnvGuard(res)) return;
 
   try {
-    const createRes = await clerkApi("/sign_ins", {
-      method: "POST",
-      body: JSON.stringify({ identifier: email }),
-    });
-    const createData = (await createRes.json()) as {
-      id?: string;
-      errors?: Array<{ message?: string }>;
-    };
-    if (!createRes.ok || !createData.id) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-
-    const signInId = createData.id;
-
-    const prepareRes = await clerkApi(
-      `/sign_ins/${signInId}/prepare_first_factor`,
-      {
-        method: "POST",
-        body: JSON.stringify({ strategy: "password" }),
-      },
+    const { sessionJwt, authUserId } = await clerkAdminPasswordLogin(
+      email,
+      password,
     );
-    const prepareData = (await prepareRes.json()) as { status?: string };
-    if (!prepareRes.ok || prepareData.status !== "needs_first_factor") {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-
-    const attemptRes = await clerkApi(
-      `/sign_ins/${signInId}/attempt_first_factor`,
-      {
-        method: "POST",
-        body: JSON.stringify({ strategy: "password", password }),
-      },
-    );
-    const attemptData = (await attemptRes.json()) as {
-      status?: string;
-      created_session_id?: string;
-      user_id?: string;
-    };
-
-    if (!attemptRes.ok || attemptData.status !== "complete") {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-
-    const sessionId = attemptData.created_session_id;
-    const authUserId = attemptData.user_id;
-    if (!sessionId || !authUserId) {
-      res.status(500).json({ error: "Session not created" });
-      return;
-    }
-
-    const dbUser = await resolveDbUser(authUserId, email);
-    if (!dbUser || dbUser.role !== "admin") {
-      res.status(403).json({ error: "Admin access only" });
-      return;
-    }
-
-    const tokenRes = await clerkApi(`/sessions/${sessionId}/tokens`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    const tokenData = (await tokenRes.json()) as { jwt?: string };
-    if (!tokenRes.ok || !tokenData.jwt) {
-      res.status(500).json({ error: "Failed to create session token" });
-      return;
-    }
-
-    res.json({
-      token: tokenData.jwt,
-      user: {
-        id: dbUser.id,
-        name: dbUser.name,
-        email: dbUser.email,
-        role: dbUser.role,
-      },
-    });
+    await finishAdminLogin(res, email, sessionJwt, authUserId);
   } catch (err) {
-    res.status(500).json({
-      error: "Login failed",
-      detail: err instanceof Error ? err.message : String(err),
-    });
+    handleAuthError(res, err);
   }
 });
 

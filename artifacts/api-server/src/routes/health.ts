@@ -40,11 +40,15 @@ router.get("/healthz/auth", async (_req, res) => {
 
 /** Verify Clerk + admin login route are configured (Render deploy check). */
 router.get("/healthz/admin", (_req, res) => {
-  const hasClerk = Boolean(process.env.CLERK_SECRET_KEY?.trim());
+  const hasSecret = Boolean(process.env.CLERK_SECRET_KEY?.trim());
+  const hasPublishable = Boolean(process.env.CLERK_PUBLISHABLE_KEY?.trim());
+  const ok = hasSecret && hasPublishable;
   res.json({
-    status: hasClerk ? "ok" : "error",
-    clerkConfigured: hasClerk,
-    adminLoginPath: "/api/admin/auth/login",
+    status: ok ? "ok" : "error",
+    clerkConfigured: hasSecret,
+    clerkPublishableConfigured: hasPublishable,
+    adminLoginPath: "/api/admin/auth/send-code",
+    adminVerifyPath: "/api/admin/auth/verify-code",
   });
 });
 

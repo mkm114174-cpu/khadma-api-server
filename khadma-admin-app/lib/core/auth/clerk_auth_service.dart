@@ -3,7 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../config/env.dart';
 
-/// تسجيل دخول الأدمن عبر السيرفر — لا يتصل بـ Clerk مباشرة من الهاتف.
+/// تسجيل دخول الأدمن عبر السيرفر — كود OTP على الإيميل.
 class ClerkAuthService {
   ClerkAuthService({Dio? dio, FlutterSecureStorage? storage})
       : _dio = dio ?? Dio(),
@@ -18,14 +18,45 @@ class ClerkAuthService {
 
   Future<void> signOut() => _storage.delete(key: _tokenKey);
 
-  Future<void> signInWithPassword({
-    required String email,
-    required String password,
+  /// الخطوة 1: إرسال كود إلى الإيميل.
+  Future<String> sendEmailCode({required String email}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '${Env.apiBaseUrl}/api/admin/auth/send-code',
+        data: {'email': email.trim()},
+        options: Options(
+          validateStatus: (s) => s != null && s < 500,
+          headers: {'Content-Type': 'application/json'},
+        ),
+      );
+
+      final data = res.data;
+      final token = data?['loginToken'];
+      if (res.statusCode == 200 && token is String && token.isNotEmpty) {
+        return token;
+      }
+
+      throw _mapResponse(res.statusCode, data);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.message?.contains('Failed host lookup') == true) {
+        throw Exception(
+          'تعذّر الاتصال بالإنترنت. تأكد من اتصال الهاتف بالشبكة.',
+        );
+      }
+      throw _mapResponse(e.response?.statusCode, e.response?.data);
+    }
+  }
+
+  /// الخطوة 2: التحقق من الكود وإتمام الدخول.
+  Future<void> verifyEmailCode({
+    required String loginToken,
+    required String code,
   }) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
-        '${Env.apiBaseUrl}/api/admin/auth/login',
-        data: {'email': email.trim(), 'password': password},
+        '${Env.apiBaseUrl}/api/admin/auth/verify-code',
+        data: {'loginToken': loginToken, 'code': code.trim()},
         options: Options(
           validateStatus: (s) => s != null && s < 500,
           headers: {'Content-Type': 'application/json'},
@@ -68,18 +99,18 @@ class ClerkAuthService {
       );
     }
     if (code == 401) {
-      return Exception('إيميل أو كلمة مرور غير صحيحة');
+      return Exception(serverMsg ?? 'الكود غير صحيح أو منتهي الصلاحية');
     }
     if (code == 403) {
-      return Exception('هذا الحساب ليس أدمن — استخدم حساب إدارة المنصة');
-    }
-    if (code == 503 && serverMsg?.contains('CLERK_SECRET_KEY') == true) {
       return Exception(
-        'أضف CLERK_SECRET_KEY في إعدادات Render ثم أعد النشر',
+        serverMsg ?? 'هذا الحساب ليس أدمن — استخدم حساب إدارة المنصة',
       );
     }
-    if (detail != null && detail.isNotEmpty) {
-      return Exception('$serverMsg\n$detail');
+    if (code == 503 && serverMsg?.contains('CLERK') == true) {
+      return Exception(serverMsg!);
+    }
+    if (detail != null && detail.isNotEmpty && code != null && code >= 500) {
+      return Exception(serverMsg ?? 'تعذّر تسجيل الدخول، حاول مجدداً');
     }
     return Exception(serverMsg ?? 'تعذّر تسجيل الدخول، حاول مجدداً');
   }
