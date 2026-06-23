@@ -1,6 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
-import { db, usersTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { isAllowedAdminEmail } from "./adminAccess";
 
 const CLERK_BAPI = "https://api.clerk.com/v1";
 
@@ -212,15 +211,7 @@ async function verifyPendingToken(token: string): Promise<PendingOtpClaims> {
 }
 
 export async function assertAdminEmail(email: string): Promise<void> {
-  const normalized = email.trim().toLowerCase();
-  const [user] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(
-      sql`lower(${usersTable.email}) = ${normalized} AND ${usersTable.role} = 'admin'`,
-    )
-    .limit(1);
-  if (!user) {
+  if (!(await isAllowedAdminEmail(email))) {
     throw new ClerkLoginError(
       "هذا الإيميل غير مصرّح له بالدخول كأدمن",
       403,

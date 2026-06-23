@@ -3,14 +3,13 @@ import { db, usersTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { ProvisionUserBody, UpdateCurrentUserBody } from "@workspace/api-zod";
 import { requireAuth, requireUser, resolveDbUser, requireRole, type AuthedRequest } from "../lib/auth";
+import { OWNER_EMAIL } from "../lib/adminAccess";
 
 const router: IRouter = Router();
 
 router.get("/users/me", requireUser, (req: Request, res: Response) => {
   res.json((req as AuthedRequest).dbUser);
 });
-
-const OWNER_EMAIL = "mkm114174@gmail.com";
 
 router.post(
   "/users",

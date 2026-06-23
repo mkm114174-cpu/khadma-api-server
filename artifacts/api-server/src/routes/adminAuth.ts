@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { resolveDbUser } from "../lib/auth";
+import { ensureAdminDbUser } from "../lib/adminAccess";
 import {
   ClerkLoginError,
   clerkAdminPasswordLogin,
@@ -31,7 +31,7 @@ async function finishAdminLogin(
   sessionJwt: string,
   authUserId: string,
 ): Promise<void> {
-  const dbUser = await resolveDbUser(authUserId, email);
+  const dbUser = await ensureAdminDbUser(authUserId, email);
   if (!dbUser || dbUser.role !== "admin") {
     res.status(403).json({
       error: "هذا الحساب ليس أدمن — استخدم حساب إدارة المنصة",
