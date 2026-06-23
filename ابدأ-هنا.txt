@@ -1,0 +1,57 @@
+# ابدأ من هنا — بدون تعقيد
+
+## ماذا تحتاج؟
+برنامج واحد فقط: **GitHub Desktop** (مثل أي برنامج عادي)
+
+---
+
+## الخطوات (4 نقرات)
+
+### ① حمّل وثبّت
+https://desktop.github.com
+
+سجّل دخول (أو أنشئ حساب مجاني — إيميل + كلمة مرور)
+
+---
+
+### ② أضف المشروع
+1. افتح GitHub Desktop
+2. **File** → **Add local repository**
+3. اختر المجلد:
+   ```
+   C:\Users\mix\Downloads\khadma-project
+   ```
+4. **Add repository**
+
+---
+
+### ③ ارفع على الإنترنت
+1. اضغط الزر الأزرق **Publish repository**
+2. الاسم: `khadma`
+3. ✅ **Keep this code private**
+4. **Publish repository**
+
+**انتهى — المشروع على GitHub.**
+
+---
+
+### ④ Render (بعد الرفع)
+1. https://dashboard.render.com
+2. **khadma-api-server** → **Settings**
+3. **Repository** → اختر `khadma`
+4. **Environment** → أضف `CLERK_SECRET_KEY`
+5. **Manual Deploy**
+
+---
+
+## أو انقر مرتين على:
+```
+ابدأ-هنا.bat
+```
+في مجلد المشروع — يفتح الروابط ويرشدك.
+
+---
+
+## ملاحظة
+GitHub هنا **مخزن للكود فقط** — مثل Google Drive للمبرمجين.
+لا تحتاج تتعلم أوامر ولا أكواد.
