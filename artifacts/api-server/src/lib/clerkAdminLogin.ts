@@ -243,25 +243,88 @@ async function createSessionJwt(
   return jwt;
 }
 
-async function resolveClerkUserId(email: string): Promise<string> {
+type ClerkErrorsPayload = {
+  errors?: Array<{ message?: string; long_message?: string; code?: string }>;
+};
+
+function clerkErrorMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === "object" && "errors" in data) {
+    const errors = (data as ClerkErrorsPayload).errors;
+    const msg = errors?.[0]?.long_message ?? errors?.[0]?.message;
+    if (msg) return msg;
+  }
+  return fallback;
+}
+
+async function findClerkUserId(email: string): Promise<string | null> {
   const normalized = email.trim().toLowerCase();
-  const paths = [
-    `/users?email_address[]=${encodeURIComponent(normalized)}`,
-    `/users?email_address=${encodeURIComponent(normalized)}`,
+
+  const listQueries = [
+    (() => {
+      const params = new URLSearchParams();
+      params.append("email_address[]", normalized);
+      params.set("limit", "10");
+      return `/users?${params.toString()}`;
+    })(),
+    `/users?email_address_query=${encodeURIComponent(normalized)}&limit=10`,
   ];
 
-  for (const path of paths) {
+  for (const path of listQueries) {
     const usersRes = await bapiFetch(path);
     const usersData = (await readJson(usersRes)) as {
-      data?: Array<{ id?: string }>;
+      data?: Array<{
+        id?: string;
+        email_addresses?: Array<{ email_address?: string }>;
+      }>;
     };
-    const clerkUserId = usersData.data?.[0]?.id;
-    if (usersRes.ok && clerkUserId) return clerkUserId;
+    if (!usersRes.ok || !usersData.data?.length) continue;
+
+    const exact = usersData.data.find((user) =>
+      user.email_addresses?.some(
+        (entry) => entry.email_address?.trim().toLowerCase() === normalized,
+      ),
+    );
+    const clerkUserId = exact?.id ?? usersData.data[0]?.id;
+    if (clerkUserId) return clerkUserId;
   }
+
+  return null;
+}
+
+async function resolveClerkUserId(email: string): Promise<string> {
+  const clerkUserId = await findClerkUserId(email);
+  if (clerkUserId) return clerkUserId;
 
   throw new ClerkLoginError(
     "لا يوجد حساب Clerk بهذا الإيميل — أنشئه من dashboard.clerk.com",
     401,
+  );
+}
+
+async function tryCreateClerkUserIfMissing(email: string): Promise<void> {
+  const normalized = email.trim().toLowerCase();
+  if (await findClerkUserId(normalized)) return;
+
+  const createRes = await bapiFetch("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      first_name: "مدير",
+      last_name: "المنصة",
+      email_address: [normalized],
+      skip_password_requirement: true,
+      skip_password_checks: true,
+    }),
+  });
+  if (createRes.ok) return;
+
+  // المستخدم موجود مسبقاً أو سيُنشأ عبر تسجيل الدخول — لا نوقف العملية.
+  if (createRes.status === 422 || createRes.status === 409) return;
+
+  const createData = await readJson(createRes);
+  console.warn(
+    "[admin] clerk user create failed:",
+    createRes.status,
+    clerkErrorMessage(createData, "unknown"),
   );
 }
 
@@ -284,45 +347,20 @@ function guardSignInStatus(signIn: SignInResponse | undefined): void {
   }
 }
 
-async function ensureClerkUserExists(email: string): Promise<void> {
-  const normalized = email.trim().toLowerCase();
-  try {
-    await resolveClerkUserId(normalized);
-    return;
-  } catch (err) {
-    if (!(err instanceof ClerkLoginError)) throw err;
-  }
-
-  const createRes = await bapiFetch("/users", {
-    method: "POST",
-    body: JSON.stringify({
-      first_name: "مدير",
-      last_name: "المنصة",
-      email_address: [normalized],
-      skip_password_requirement: true,
-    }),
-  });
-  if (createRes.ok) return;
-
-  try {
-    await resolveClerkUserId(normalized);
-    return;
-  } catch {
-    throw new ClerkLoginError("تعذّر تجهيز حساب Clerk لهذا الإيميل", 500);
-  }
-}
-
 /** الخطوة 1: إرسال كود OTP إلى إيميل الأدمن. */
 export async function clerkAdminSendEmailCode(
   email: string,
 ): Promise<{ loginToken: string }> {
   const normalized = email.trim().toLowerCase();
   await assertAdminEmail(normalized);
-  await ensureClerkUserExists(normalized);
+  await tryCreateClerkUserIfMissing(normalized);
 
   const jar = await initFapiClient();
 
-  const createBody = new URLSearchParams({ identifier: normalized });
+  const createBody = new URLSearchParams({
+    strategy: "email_code",
+    identifier: normalized,
+  });
   const { res: createRes, data: createData } = await fapiPost(
     jar,
     "/v1/client/sign_ins",
@@ -332,31 +370,41 @@ export async function clerkAdminSendEmailCode(
   const created = createData as SignInPayload;
   const signIn = created.response;
   const signInId = signIn?.id;
+  let status = signIn?.status;
 
   if (!createRes.ok || !signInId) {
-    throw new ClerkLoginError("تعذّر بدء تسجيل الدخول", 401);
-  }
-
-  const prepareBody = new URLSearchParams({ strategy: "email_code" });
-  const emailAddressId = pickEmailAddressId(signIn);
-  if (emailAddressId) {
-    prepareBody.set("email_address_id", emailAddressId);
-  }
-
-  const { res: prepareRes, data: prepareData } = await fapiPost(
-    jar,
-    `/v1/client/sign_ins/${signInId}/prepare_first_factor`,
-    prepareBody,
-    true,
-  );
-  const prepared = prepareData as SignInPayload;
-  guardSignInStatus(prepared.response);
-
-  if (!prepareRes.ok || prepared.response?.status !== "needs_first_factor") {
     throw new ClerkLoginError(
-      "تسجيل الدخول بالكود غير مفعّل — فعّله من إعدادات Clerk",
-      503,
+      clerkErrorMessage(createData, "تعذّر بدء تسجيل الدخول"),
+      401,
     );
+  }
+
+  if (status !== "needs_first_factor") {
+    const prepareBody = new URLSearchParams({ strategy: "email_code" });
+    const emailAddressId = pickEmailAddressId(signIn);
+    if (emailAddressId) {
+      prepareBody.set("email_address_id", emailAddressId);
+    }
+
+    const { res: prepareRes, data: prepareData } = await fapiPost(
+      jar,
+      `/v1/client/sign_ins/${signInId}/prepare_first_factor`,
+      prepareBody,
+      true,
+    );
+    const prepared = prepareData as SignInPayload;
+    guardSignInStatus(prepared.response);
+    status = prepared.response?.status;
+
+    if (!prepareRes.ok || status !== "needs_first_factor") {
+      throw new ClerkLoginError(
+        clerkErrorMessage(
+          prepareData,
+          "تسجيل الدخول بالكود غير مفعّل — فعّله من إعدادات Clerk",
+        ),
+        503,
+      );
+    }
   }
 
   const loginToken = await signPendingToken({
