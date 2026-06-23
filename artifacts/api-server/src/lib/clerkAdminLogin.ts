@@ -244,17 +244,34 @@ async function createSessionJwt(
 }
 
 async function resolveClerkUserId(email: string): Promise<string> {
-  const usersRes = await bapiFetch(
-    `/users?email_address[]=${encodeURIComponent(email)}`,
-  );
-  const usersData = (await readJson(usersRes)) as {
-    data?: Array<{ id?: string }>;
-  };
-  const clerkUserId = usersData.data?.[0]?.id;
-  if (!usersRes.ok || !clerkUserId) {
-    throw new ClerkLoginError("لا يوجد حساب Clerk بهذا الإيميل", 401);
+  const normalized = email.trim().toLowerCase();
+  const paths = [
+    `/users?email_address[]=${encodeURIComponent(normalized)}`,
+    `/users?email_address=${encodeURIComponent(normalized)}`,
+  ];
+
+  for (const path of paths) {
+    const usersRes = await bapiFetch(path);
+    const usersData = (await readJson(usersRes)) as {
+      data?: Array<{ id?: string }>;
+    };
+    const clerkUserId = usersData.data?.[0]?.id;
+    if (usersRes.ok && clerkUserId) return clerkUserId;
   }
-  return clerkUserId;
+
+  throw new ClerkLoginError(
+    "لا يوجد حساب Clerk بهذا الإيميل — أنشئه من dashboard.clerk.com",
+    401,
+  );
+}
+
+async function clerkUserIdFromSession(sessionId: string): Promise<string> {
+  const sessionRes = await bapiFetch(`/sessions/${sessionId}`);
+  const sessionData = (await readJson(sessionRes)) as { user_id?: string };
+  if (!sessionRes.ok || !sessionData.user_id) {
+    throw new ClerkLoginError("تعذّر جلب بيانات الجلسة", 500);
+  }
+  return sessionData.user_id;
 }
 
 function guardSignInStatus(signIn: SignInResponse | undefined): void {
@@ -273,7 +290,6 @@ export async function clerkAdminSendEmailCode(
 ): Promise<{ loginToken: string }> {
   const normalized = email.trim().toLowerCase();
   await assertAdminEmail(normalized);
-  await resolveClerkUserId(normalized);
 
   const jar = await initFapiClient();
 
@@ -356,7 +372,7 @@ export async function clerkAdminVerifyEmailCode(
     throw new ClerkLoginError("الكود غير صحيح أو منتهي الصلاحية", 401);
   }
 
-  const authUserId = await resolveClerkUserId(pending.email);
+  const authUserId = await clerkUserIdFromSession(sessionId);
   const sessionJwt = await createSessionJwt(jar, sessionId);
 
   return { sessionJwt, authUserId, email: pending.email };
